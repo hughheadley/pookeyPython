@@ -1,7 +1,10 @@
 # This script will host poker games to collect data.
 
+from __future__ import division
 import numpy as np
 import random
+from deuces import Card, Evaluator
+
 random.seed()
 
 def setBlinds(dealerPosition, initialNumberPlayers, bets, chips, calls):
@@ -41,7 +44,7 @@ def dealCard(existingCards):
         # Check if card is unique.
         for i in range(0,len(existingCards)):
             if(existingCards[i] == 0):
-                # End the testing for uniqueness.
+                # Card is unique, end the testing for uniqueness.
                 i = 52
             elif(existingCards[i] == newCard):
                 uniqueCard = False
@@ -163,9 +166,118 @@ def showHoleCards(playerNames, AIPlayers, playerCards, initialNumberPlayers):
             for i in range(0,20):
                 print "\n"
 
+def getDeucesCardNumber(cardIndex):
+    # Takes a card index 1-52 and finds the card number string compatible
+    #with the deuces library.
+    # Find the card's rank 2-Ace
+    cardNumber = (cardIndex - 1) % 13 + 2
+    if(cardNumber < 10):
+        cardNumberString = str(int(cardNumber))
+    elif(cardNumber == 10):
+        cardNumberString = "T"
+    elif(cardNumber == 11):
+        cardNumberString = "J"
+    elif(cardNumber == 12):
+        cardNumberString = "Q"
+    elif(cardNumber == 13):
+        cardNumberString = "K"
+    elif(cardNumber == 14):
+        cardNumberString = "A"
+    return cardNumberString
+
+def getDeucesSuit(cardIndex):
+    # Takes a card index 1-52 and finds the suit string compatible with
+    #the deuces library.
+    # Find the card's rank 2-Ace    
+    suitNumber = int((cardIndex - 1) / 13) + 1
+    if(suitNumber == 1):
+        cardSuitString = "c"
+    elif(suitNumber == 2):
+        cardSuitString = "d"
+    elif(suitNumber == 3):
+        cardSuitString = "h"
+    elif(suitNumber == 4):
+        cardSuitString = "s"
+    return cardSuitString
+
+def convertToDeuces(cardIndex):
+    cardNumberString = getDeucesCardNumber(cardIndex)
+    cardSuitString = getDeucesSuit(cardIndex)
+    # Put card number and suit together
+    cardString = cardNumberString + cardSuitString
+    return cardString
+
+def setUpDeucesCards(cardsList):
+    # Take a list of cards numbered 1-52 and put them into the form
+    #used by deuces evaluator.
+    # Convert card numbers to a deuces form string.
+    cardStrings = []
+    for i in range (0,len(cardsList)):
+        cardStrings.append(convertToDeuces(cardsList[i]))
+    # Put cards into a deuces form hand
+    deucesCards = []
+    for i in range (0,len(cardsList)):
+        deucesCards.append(Card.new(cardStrings[i]))
+    return deucesCards
+
+def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
+    # Calculate the chance of holeCards beating one opponent with random cards.
+    # deuces library is used for calculating hand ranks.
+    # sampleSize=400 gives accuracy to within 5% for all hands
+    existingCards = np.zeros(9)
+    board = [0] * 5
+    # Find how many community cards are already played.
+    if(roundNumber == 1):
+        communityCardCount = 0
+    elif(roundNumber == 2):
+        communityCardCount = 3
+    elif(roundNumber == 3):
+        communityCardCount = 4
+    elif(roundNumber == 4):
+        communityCardCount = 5
+    # Convert player hole cards and community cards to the form
+    #compatiple with the deuces library.
+    myHand = setUpDeucesCards(holeCards)
+    # Add my cards and community cards to existing card set.
+    existingCards[0] = holeCards[0]
+    existingCards[1] = holeCards[1]
+    for i in range(0, communityCardCount):
+        existingCards[i + 2] = communityCards[i]
+    # Test win/loss outcome repeatedly.
+    winCount = 0
+    opponentCards = [0] * 2
+    for i in range(0, sampleSize):
+        # Generate opponent's cards and remaining community cards.
+        for j in range(communityCardCount, 5):
+            communityCards[j] = dealCard(existingCards)
+            existingCards[j + 2] = communityCards[j]
+        for j in range(0,2):
+            opponentCards[j] = dealCard(existingCards)
+            existingCards[7 + j] = opponentCards[j]
+        # Put opponent hand and community cards in deuces form.
+        opponentHand = setUpDeucesCards(opponentCards)
+        board = setUpDeucesCards(communityCards)
+        # Evaluate hand ranks.
+        evaluator = Evaluator()
+        myRank = evaluator.evaluate(board, myHand)
+        opponentRank = evaluator.evaluate(board, opponentHand)
+        # Compare hand ranks. Lower rank indicates better hand.
+        if(myRank < opponentRank):
+            winCount += 1
+        elif(myRank == opponentRank):
+            winCount += 0.5
+        # Reset existing cards.
+        for j in range(communityCardCount + 2, 9):
+            existingCards[j] = 0
+    print "Wincount is " + str(winCount)
+    print "sampleSize is " + str(sampleSize)    
+    handStrength = (winCount / sampleSize)
+    return handStrength
+
 def manualDealRoundOne(
     dealerPosition, initialNumberPlayers, playernames, playerCards):
-    # Request user input to deal the player's hole cards, nothing to return.
+    # Request user input to deal the player's hole cards, nothing to
+    #return.
     dealPositionEnd = dealerPosition + initialNumberPlayers + 1
     for i in range (dealerPosition + 1, dealPositionEnd):
         position = i % initialNumberPlayers
@@ -368,23 +480,9 @@ dealerPosition = 0
 manualDealing = False
 trainingMode = False
 
-roundNumber = 0
-dealerPosition = 0
-manualDealing = True
-initialNumberPlayers = len(playerNames)
-trainingMode = False
-folds = [False, False, False]
-playerCards = np.zeros((2 * initialNumberPlayers,2))
-communityCards = np.zeros(5)
-existingCards = np.zeros((initialNumberPlayers * 2) + 5)
-
-for roundNumber in range(1,5):
-    deal(
-        roundNumber, dealerPosition, manualDealing, initialNumberPlayers,
-        trainingMode, AIPlayers, playerNames, folds, playerCards,
-        communityCards, existingCards)
 
 '''
+# Test implementation
 playhand(
     playerNames=playerNames, initialChips=initialChips,
     AIPlayers=AIPlayers, bigBlind=100, dealerPosition=dealerPosition,
