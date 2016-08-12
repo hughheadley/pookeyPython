@@ -169,7 +169,7 @@ def showHoleCards(playerNames, AIPlayers, playerCards, initialNumberPlayers):
 def getDeucesCardNumber(cardIndex):
     # Takes a card index 1-52 and finds the card number string compatible
     #with the deuces library.
-    # Find the card's rank 2-Ace
+    # Find the card's rank 2-Ace.
     cardNumber = (cardIndex - 1) % 13 + 2
     if(cardNumber < 10):
         cardNumberString = str(int(cardNumber))
@@ -188,7 +188,6 @@ def getDeucesCardNumber(cardIndex):
 def getDeucesSuit(cardIndex):
     # Takes a card index 1-52 and finds the suit string compatible with
     #the deuces library.
-    # Find the card's rank 2-Ace    
     suitNumber = int((cardIndex - 1) / 13) + 1
     if(suitNumber == 1):
         cardSuitString = "c"
@@ -203,7 +202,7 @@ def getDeucesSuit(cardIndex):
 def convertToDeuces(cardIndex):
     cardNumberString = getDeucesCardNumber(cardIndex)
     cardSuitString = getDeucesSuit(cardIndex)
-    # Put card number and suit together
+    # Put card number and suit together.
     cardString = cardNumberString + cardSuitString
     return cardString
 
@@ -214,16 +213,17 @@ def setUpDeucesCards(cardsList):
     cardStrings = []
     for i in range (0,len(cardsList)):
         cardStrings.append(convertToDeuces(cardsList[i]))
-    # Put cards into a deuces form hand
+    # Put cards into a deuces form hand.
     deucesCards = []
     for i in range (0,len(cardsList)):
         deucesCards.append(Card.new(cardStrings[i]))
     return deucesCards
 
 def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
-    # Calculate the chance of holeCards beating one opponent with random cards.
+    # Calculate the chance of holeCards beating one opponent with random
+    #cards.
     # deuces library is used for calculating hand ranks.
-    # sampleSize=400 gives accuracy to within 5% for all hands
+    # sampleSize=400 gives accuracy to within 5% for all hands.
     existingCards = np.zeros(9)
     board = [0] * 5
     # Find how many community cards are already played.
@@ -268,9 +268,7 @@ def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
             winCount += 0.5
         # Reset existing cards.
         for j in range(communityCardCount + 2, 9):
-            existingCards[j] = 0
-    print "Wincount is " + str(winCount)
-    print "sampleSize is " + str(sampleSize)    
+            existingCards[j] = 0 
     handStrength = (winCount / sampleSize)
     return handStrength
 
@@ -281,7 +279,7 @@ def manualDealRoundOne(
     dealPositionEnd = dealerPosition + initialNumberPlayers + 1
     for i in range (dealerPosition + 1, dealPositionEnd):
         position = i % initialNumberPlayers
-        #Get first hole card.
+        # Get first hole card.
         inputPrompt = "\nEnter " + playerNames[position] + "'s first card\n"
         cardNumber = getCardNumber(inputPrompt)
         inputPrompt = "Enter " + playerNames[position] + "'s first suit\n"
@@ -435,11 +433,120 @@ def deal(
             autoDealRoundFour(
                 initialNumberPlayers, trainingMode, playerCards,
                 communityCards, existingCards)
-                
+
+def getAIBet(callValue, bigBlind, handStrength, chips, position):
+    # Use simple betting scheme for now.
+    if(handStrength > 0.5):
+        newBet = callValue + bigBlind
+    elif(handStrength > 0.3):
+        newBet = callValue
+    else:
+        newBet = 0
+    # Go all-in if newBet is greater than chip count.
+    if(newBet > chips[position]):
+        newBet = chips[position]
+    return newBet
+
+def checkHumanBetValid(newBetString, chipCount, betsMade, maxBet):
+    # Check if new bet is a number
+    if(not newBetString.isdigit()):
+        print "That wasn't a valid bet\n"
+    else:
+        newBet = int(float(newBet))
+        if(newBet == 0):
+            return newBet
+        else:
+            # Check if player can afford the full call value.
+            if(chipCount + betsMade < maxBet):
+                if(newBet < chipCount):
+                    # Bet is not valid.
+                    print "You must bet all your money or fold \n"
+                else:
+                    # Bet is valid.
+                    return newBet
+            else:
+                # Check if bet is valid.
+                if(((newBet >= callValue) and (newBet <= chipCount))
+                    or (newBet == chipCount)):
+                    # Bet is valid.
+                    return newBet
+                else:
+                    # Print problem message and request bet again.
+                    if((chipCount > newBet) and (newBet != 0)):
+                        print "That's not enough\n"
+                    if(chipCount < newBet):
+                        print "That's more than your chip stack\n"
+    return False    
+
+def getHumanBet(
+    position, maxBet, callValue, pot, playerName, chipCount, betsMade,
+    trainingMode):
+    print(playerName + " has " + str(chipCount) + " chips and has bet "
+          + str(betsMade) + " already\n")
+    print("The bet to match is " + str(maxBet) + " for a pot of "
+          + str(pot) + "\n")
+    print(playerName + ", the call value is " + str(callValue))
+    inputPrompt = "\nHow much are you betting? \n"
+    while(True):
+        newBetString = raw_input(inputPrompt)
+        newBet = checkHumanBetValid(newBetString, chipCount, betsMade, maxBet)
+        if(newBet is not False):
+            return newBet
+
+def getBet(
+    position, playerNames, AIPlayers, trainingMode, bigBlind,
+    handStrength, bets, calls, raises, initialNumberPlayers,
+    playersActive):
+    # Calculate callValue and maxBet.
+    maxBet = np.amax(bets)
+    callValue = maxBet - bets[position]
+    if(AIPlayers[position]):
+        newBet = getAIBet(
+            callValue, bigBlind, handStrength, chips, position)
+    else:
+        newBet = getHumanBet(
+            maxBet, callValue, pot, playerNames[position],
+            chips[position], bets[position], trainingMode)
+    # Final check to see if bet is valid.
+    betValidity = (((newBet >= callValue) and (newBet <= chips[position]))
+        or (newBet == chips[position]))
+    if(not betVaility):
+        raw_input("Error invalid bet made")
+    return newBet
+
+def doBetting(
+    bigBlind, initialNumberPlayers, chips, bets, raises, calls, folds,
+    startPosition, playerNames, cardStrengths, trainingMode):
+    # Conduct a round of betting, update chips and return the final
+    #position played from.
+    # Reset round activity.
+    roundActive = True
+    
+    # active = True indicates that a player has acted this round.
+    active = [False] * initialNumberPlayers 
+    while(roundActive):
+        newBet = 0;
+        # Check if the round is over.
+        # Betting ends if there is 1 player left or if someone who
+        #has acted already has nothing to call.
+        if((playersActive == 1) or
+            (active[position] and (bets[position] == maxbet))):
+            roundActive = False
+            position = (position - 1) % initialNumberPlayers
+        else:
+            if(not folds[position]):
+                # Check if player can bet.
+                if((chips[position] == 0) and (not trainingMode)):
+                    print playerNames[position] + " cannot bet"
+                else:
+                    handStrength = cardStrengths[position]
+                    # Use simple getBet function for now.
+                    newBet = getBet(handStrength)
+
 def playhand(playerNames, initialChips, AIPlayers, bigBlind,
         dealerPosition, manualDealing, trainingMode):
-    # playhand takes the players' names and game situation
-    #and plays one hand of poker.
+    # playhand takes the players' names and game situation and plays one
+    #hand of poker.
     # Set initial values for the game.
     initialNumberPlayers = len(initialChips)
     activePlayerCount = initialNumberPlayers
@@ -461,15 +568,22 @@ def playhand(playerNames, initialChips, AIPlayers, bigBlind,
 
     # Loop through all rounds of betting.
     for roundNumber in range (1,5):
-        # Reset round activity.
-        roundActive = True
-        # active = True indicates that a player has acted this round.
-        active = [False] * initialNumberPlayers 
-        # Deal cards for this round.
+        # Deal cards for this round and print community cards if not
+        #in training mode.
         deal(
         roundNumber, dealerPosition, manualDealing, initialNumberPlayers,
         trainingMode, AIPlayers, playerNames, folds, playerCards,
         communityCards, existingCards)
+        # Get the strength of each player's hand.
+        cardStrengths = [0] * initialNumberPlayers
+        for position in range(0,initialNumberPlayers):
+            if(not folds[position]):
+                holeCards[0] = playerCards[position][0]
+                holeCards[1] = playerCards[position][1]
+                cardStrengths[position] = getHandStrength(
+                    holeCards, communityCards, roundNumber)
+        # Begin the betting.
+        doBetting()                
 
 # Play one example game.
 playerNames = ["Hugh", "Robin", "Pookey"]
