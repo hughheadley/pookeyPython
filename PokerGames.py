@@ -674,6 +674,79 @@ def doBetting(
     maxBet = adjustedBetInfo[0]
     pot = adjustedBetInfo[1]
 
+def sortHandRanks(handRanks):    
+    handRankPositions = range(0,len(handRanks))
+    # Put handRanks list in order lowest to highest and order positions
+    #so that they match their handRanks.
+    # A lower hand rank indicates a better hand
+    for i in range(0, len(handRanks)):
+        for j in range(0, len(handRanks)):
+            if(handRanks[i] < handRanks[j]):
+                temp = handRanks[i]
+                handRanks[i] = handRanks[j]
+                handRanks[j] = temp
+                temp = positions[i]
+                handRankPositions[i] = handRankPositions[j]
+                handRankPositions[j] = temp
+    return handRankPositions
+
+def getHandRankPositions(playerCards, communityCards, folds):
+    initialNumberPlayers = len(folds)
+    handRanks = [0] * initialNumberPlayers
+    holeCards = [0] * 2
+    board = setUpDeucesCards(communityCards)
+    evaluator = Evaluator()
+    for position in range(0, initialNumberPlayers):
+        holeCards[0] = playerCards[position][0]
+        holeCards[1] = playerCards[position][1]
+        hand = setUpDeucesCards(holeCards)
+        # Evaluate hand rank.
+        handRanks[position] = evaluator.evaluate(board, hand)
+    # Sort positions by hand ranks lowest-highest    
+    handRankPositions = sortHandRanks(handRanks)
+    return handRankPositions
+
+def giveWinnings(
+    chips, bets, folds, playerNames, playerCards, communityCards,
+    trainingMode):
+    initialnumberPlayers = len(chips)
+    # Print all players' cards
+    if(not trainingMode):
+        for position in range(0, initialNumberPlayers):
+            if(not folds[position]):
+                print playernames[position] + "'s cards are \n"
+                for i in range(0,2):
+                    suitTemp = cardIndexToSuit(playerCards[position][i])
+                    cardNumberTemp = cardIndexToNumber(
+                        playerCards[position][i])
+                    print suitTemp + cardNumberTemp
+    # Find the position of the winner(s).
+    winnerPositions = findWinner(playerCards, communityCards, folds)
+    # Loop through all players to collect their winnings.
+    for i in range(0, initialNumberPlayers):
+        if(not folds[winnerPositions[i]]):
+            sumWinnings = 0
+            winnerBet = bets[winnerPositions[i]]
+            if(not trainingMode):
+                print "The "
+                if(i == 0):
+                    print "first "
+                else:
+                    print "next "
+                print "winner is " + playerNames[winnerPositions[i]] + "\n"
+            # Loop through all players to take winnings from.
+            for j in range(0, initialNumberPlayers):
+                # If the winner has a higher bet then take all of the
+                #loser's money.
+                if(winnerBet >= bets[j]):
+                    sumWinnings += bets[j]
+                    bets[j] = 0
+                else:
+                    sumWinnings += winnerBet
+                    bets[j] -= winnerBet
+            # Add the totaled chips to the winner's chip stack
+            chips[winnerPositions[i]] += sumWinnings
+
 def playhand(
     playerNames, initialChips, AIPlayers, bigBlind, dealerPosition,
     manualDealing, trainingMode):
@@ -715,6 +788,7 @@ def playhand(
         doBetting(
         bigBlind, initialNumberPlayers, chips, bets, raises, calls, folds,
         startPosition, playerNames, cardStrengths, trainingMode)
+    giveWinnings()
 
 # Play one example game.
 playerNames = ["Hugh", "Robin", "Pookey"]
