@@ -27,13 +27,6 @@ def setBlinds(dealerPosition, initialNumberPlayers, bets, chips, calls):
     bets[bigBlindPosition] = bigBlindBet
     chips[bigBlindPosition] -= bigBlindBet
     calls[bigBlindPosition] = bigBlindBet
-    pot = bigBlindBet + smallBlindBet    
-    # Create list with blind information to return.
-    blindInformation = []
-    blindInformation.append(smallBlindPosition)
-    blindInformation.append(bigBlindPosition)
-    blindInformation.append(pot)
-    return blindInformation
 
 def dealCard(existingCards):
     # Deal one new card which is not in the existingCards.
@@ -154,17 +147,16 @@ def printCard(cardIndex):
     cardNumber = cardIndexToNumber(cardIndex)
     print str(cardNumber) + suit
 
-def showHoleCards(playerNames, AIPlayers, playerCards, initialNumberPlayers):
-    # Print the hole cards for each player to read.
-    for position in range(0, initialNumberPlayers):
-        if(not AIPlayers[position]):
-            print playerNames[position] + " your cards are:"
-            printCard(playerCards[position][0])
-            printCard(playerCards[position][1])
-            temp = raw_input("Enter anything to continue\n")
-            # Print many line breaks to hide cards from the next player.
-            for i in range(0,20):
-                print "\n"
+def showHoleCards(position, playerNames, AIPlayers, playerCards):
+    # Print the hole cards for one player to read.
+    if(not AIPlayers[position]):
+        print playerNames[position] + " your cards are:"
+        printCard(playerCards[position][0])
+        printCard(playerCards[position][1])
+        temp = raw_input("Enter anything to continue\n")
+        # Print many line breaks to hide cards from the next player.
+        for i in range(0,20):
+            print "\n"
 
 def getDeucesCardNumber(cardIndex):
     # Takes a card index 1-52 and finds the card number string compatible
@@ -273,7 +265,7 @@ def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
     return handStrength
 
 def manualDealRoundOne(
-    dealerPosition, initialNumberPlayers, playernames, playerCards):
+    dealerPosition, initialNumberPlayers, playerNames, playerCards):
     # Request user input to deal the player's hole cards, nothing to
     #return.
     dealPositionEnd = dealerPosition + initialNumberPlayers + 1
@@ -336,24 +328,28 @@ def manualDealRoundFour(communityCards):
     communityCards[4] = cardValue
 
 def autoDealRoundOne(
-    roundNumber, dealerPosition, manualDealing, initialNumberPlayers,
+    dealerPosition, manualDealing,
     trainingMode, AIPlayers, playerNames, folds, playerCards,
     communityCards, existingCards):
+    initialNumberPlayers = len(folds)
     # Fill card arrays with hole cards.
-    for position in range(0,initialNumberPlayers):
+    dealingStart = dealerPosition + 1
+    dealingEnd = dealerPosition + initialNumberPlayers + 1
+    for i in range(dealingStart, dealingEnd):
+        position = i % initialNumberPlayers
         if(not folds[position]):
-            for i in range(0,2):
+            for j in range(0,2):
                 newCard = dealCard(existingCards)
-                playerCards[position][i] = newCard
-                existingCards[(2 * position) + i] = newCard
-    # Tell players what their cards are.
-    showHoleCards(playerNames, AIPlayers, playerCards, initialNumberPlayers)
+                playerCards[position][j] = newCard
+                existingCards[(2 * (i - dealingStart)) + j] = newCard
+        # Tell players what their cards are.
+        showHoleCards(position, playerNames, AIPlayers, playerCards)
             
 def autoDealRoundTwo(
     initialNumberPlayers, trainingMode, playerCards, communityCards,
     existingCards):
     if(not trainingMode):
-        print "The flop cards are:"
+        print "\nThe flop cards are:"
     # Generate and store a flop cards.
     for i in range(0,3):
         newCard = dealCard(existingCards)
@@ -363,6 +359,7 @@ def autoDealRoundTwo(
         if(not trainingMode):
             printCard(newCard)
     if(not trainingMode):
+        print "\n"
         temp = raw_input("Enter anything to continue\n")
         print "\n"
 
@@ -371,13 +368,14 @@ def autoDealRoundThree(
     existingCards):
     # Generate and store the turn card.
     if(not trainingMode):
-        print "The turn card is:"
+        print "\nThe turn card is:"
     newCard = dealCard(existingCards)
     communityCards[3] = newCard
     existingCards[(initialNumberPlayers * 2) + 3] = newCard
     # Announce the new card.
     if(not trainingMode):
         printCard(newCard)
+        print "\n"
         temp = raw_input("Enter anything to continue\n")
         print "\n"
     
@@ -386,23 +384,24 @@ def autoDealRoundFour(
     existingCards):
     # Generate and store the river card.
     if(not trainingMode):
-        print "The river card is:"
+        print "\nThe river card is:"
     newCard = dealCard(existingCards)
     communityCards[4] = newCard
     existingCards[(initialNumberPlayers * 2) + 4] = newCard
     # Announce the new card.
     if(not trainingMode):
         printCard(newCard)
+        print "\n"
         temp = raw_input("Enter anything to continue\n")
         print "\n"
 
 def deal(
-    roundNumber, dealerPosition, manualDealing, initialNumberPlayers,
-    trainingMode, AIPlayers, playerNames, folds, playerCards,
-    communityCards, existingCards):
-    # Fills card lists with generated cards between 1 and 52.
+    roundNumber, dealerPosition, manualDealing, trainingMode, AIPlayers,
+    playerNames, folds, playerCards, communityCards, existingCards):
+    # Fill card lists with generated cards between 1 and 52.
     # If manualDealing is True the user is prompted to input cards from
     #a live pack.
+    initialNumberPlayers = len(folds)
     if(manualDealing):
         if(roundNumber == 1):
             manualDealRoundOne(
@@ -417,8 +416,7 @@ def deal(
     else:
         if(roundNumber == 1):
             autoDealRoundOne(
-                roundNumber, dealerPosition, manualDealing,
-                initialNumberPlayers, trainingMode, AIPlayers,
+                dealerPosition, manualDealing, trainingMode, AIPlayers,
                 playerNames, folds, playerCards, communityCards,
                 existingCards)
         elif(roundNumber == 2):
@@ -447,12 +445,12 @@ def getAIBet(callValue, bigBlind, handStrength, chips, position):
         newBet = chips[position]
     return newBet
 
-def checkHumanBetValid(newBetString, chipCount, betsMade, maxBet):
-    # Check if new bet is a number
+def checkHumanBetValid(newBetString, chipCount, betsMade, callValue, maxBet):
+    # Check if new bet is a number.
     if(not newBetString.isdigit()):
-        print "That wasn't a valid bet\n"
+        print "That isn't a valid bet\n"
     else:
-        newBet = int(float(newBet))
+        newBet = int(float(newBetString))
         if(newBet == 0):
             return newBet
         else:
@@ -460,7 +458,9 @@ def checkHumanBetValid(newBetString, chipCount, betsMade, maxBet):
             if(chipCount + betsMade < maxBet):
                 if(newBet < chipCount):
                     # Bet is not valid.
-                    print "You must bet all your money or fold \n"
+                    print "You must bet all your money or fold\n"
+                elif(chipCount < newBet):
+                    print "That's more than your chip stack\n"
                 else:
                     # Bet is valid.
                     return newBet
@@ -478,39 +478,41 @@ def checkHumanBetValid(newBetString, chipCount, betsMade, maxBet):
                         print "That's more than your chip stack\n"
     return False    
 
-def getHumanBet(
-    position, maxBet, callValue, pot, playerName, chipCount, betsMade,
-    trainingMode):
-    print(playerName + " has " + str(chipCount) + " chips and has bet "
-          + str(betsMade) + " already\n")
-    print("The bet to match is " + str(maxBet) + " for a pot of "
-          + str(pot) + "\n")
-    print(playerName + ", the call value is " + str(callValue))
+def getHumanBet(position, playerName, chipCount, bets):
+    maxBet = np.amax(bets)
+    callValue = maxBet - bets[position]
+    pot = sum(bets)
+    betsMade = bets[position]
+    print("\n" + playerName + " has " + str(int(chipCount))
+          + " chips and has bet " + str(int(betsMade)) + " already")
+    print("The bet to match is " + str(int(maxBet)) + " for a pot of "
+          + str(int(pot)))
+    print(playerName + ", the call value is " + str(int(callValue)))
     inputPrompt = "\nHow much are you betting? \n"
     while(True):
         newBetString = raw_input(inputPrompt)
-        newBet = checkHumanBetValid(newBetString, chipCount, betsMade, maxBet)
+        newBet = checkHumanBetValid(
+            newBetString, chipCount, betsMade, callValue, maxBet)
         if(newBet is not False):
             return newBet
 
 def getBet(
     position, playerNames, AIPlayers, trainingMode, bigBlind,
-    handStrength, bets, calls, raises, initialNumberPlayers,
-    playersActive):
-    # Calculate callValue and maxBet.
+    handStrength, chips, bets, calls, raises):
+    # Calculate values used in decising bet.
+    initialNumberPlayers = len(bets)
     maxBet = np.amax(bets)
     callValue = maxBet - bets[position]
     if(AIPlayers[position]):
         newBet = getAIBet(
             callValue, bigBlind, handStrength, chips, position)
     else:
-        newBet = getHumanBet(
-            maxBet, callValue, pot, playerNames[position],
-            chips[position], bets[position], trainingMode)
+        newBet = getHumanBet(position, playerNames[position], chips[position],
+            bets)
     # Final check to see if bet is valid.
     betValidity = (((newBet >= callValue) and (newBet <= chips[position]))
-        or (newBet == chips[position]))
-    if(not betVaility):
+        or (newBet == chips[position]) or (newBet == 0))
+    if(not betValidity):
         raw_input("Error invalid bet made")
     return newBet
 
@@ -525,26 +527,32 @@ def betActionType(newBet, position, chips, bets):
         and (chips[position] > 0))
     if(hasChecked):
         return "check"
-    canAffordCall = (chips[position] >= callvalue)
+    canAffordCall = (chips[position] >= callValue)
     if(canAffordCall):
         if(newBet == callValue):
             return "call"
-        elif(newbet > callValue):
+        elif(newBet > callValue):
             return "raise"
     else:
         # If they can't afford a call and they went all in.
-        if(newbet == chips[position]):
+        if((chips[position] == 0) and (newBet == 0)):
+            return "cannot bet"
+        elif(newBet == chips[position]):
             return "all-in call"
     # If newBet does not satisfy any of the above cases then there is an
     #error. Notify user with raw_input so that script pauses
     raw_input("Error: betActionType cannot determine action")
 
 def postBetUpdate(
-    position, newBet, playerNames, chips, bets, calls, raises, active):
+    position, newBet, playerNames, chips, bets, calls, raises, active, folds):
     # After a new bet update folds, chips, bets, calls, raises lists.
-    # Return a list with new pot and playersActive.
+    # Return a list with new pot, playersActive and the type of bet made.
+    print("ln 551 postbetupdate start: " + str(sum(bets)))
+    initialNumberPlayers = len(bets)
+    playersActive = initialNumberPlayers - sum(folds)
     oldMaxBet = np.amax(bets)
-    callValue = maxBet - bets[position]
+    callValue = oldMaxBet - bets[position]
+    newMaxBet = 0
     betType = betActionType(newBet, position, chips, bets)
     if(betType == "fold"):
         playersActive -= 1
@@ -558,6 +566,9 @@ def postBetUpdate(
         calls[position] += newBet
         if(not trainingMode):
             print("\n" + playerNames[position] + " has called")
+    elif(betType == "cannot bet"):
+        # Do nothing
+        temp = 0
     else:
         # Player calls/raises.
         if(not trainingMode):
@@ -565,28 +576,28 @@ def postBetUpdate(
                 print("\n" + playerNames[position] + " has called")
             elif(betType == "raise"):
                 print("\n" + playerNames[position] + " has raised")
-        calls[position] += maxBet - bets[position]
+        calls[position] += oldMaxBet - bets[position]
         raises[position] += bets[position] + newBet - oldMaxBet
-        maxbet = bets[position] + newbet
+        newMaxBet = bets[position] + newBet
     # Remaining updates are independant of whether player
     #folded/checked/raised/called.
     bets[position] += newBet
     chips[position] -= newBet
     active[position] = True
-    pot += newBet
+    pot = sum(bets)
     # Announce new bet if it is a raise/call.
-    if(not (hasFolded or hasChecked)):
+    if(betType in ["bet","call"]):
         if(not trainingMode):
             print(
-                "\n" + playerNames[position] + " has bet " + str(newBet)
-                + playerNames[position] + " now has "
-                + str(chips[position]) + " chips.\n")
+                playerNames[position] + " has bet " + str(int(newBet))
+                + ", " + playerNames[position] + " now has "
+                + str(int(chips[position])) + " chips.\n")
+    # Count the number of players still active
     updatedValues = []
     updatedValues.append(playersActive)
-    updatedValues.append(maxBet)
-    updatedValues.append(pot)
     # Store betType for later analysis/learning
     updatedValues.append(betType)
+    print("ln 602 postbetupdate end: " + str(sum(bets)))
     return updatedValues
 
 def sortBets(bets, positions):
@@ -602,11 +613,13 @@ def sortBets(bets, positions):
                 positions[i] = positions[j]
                 positions[j] = temp
 
-def adjustHighestBet(bets, chips, raises, maxBet, pot, bigBlind):
+def adjustHighestBet(bets, chips, raises, bigBlind):
     # Find the player who bet the most; if nobody matched their bet then
-    #reduce it to the second highest bet and reduce the pot, ect.
+    #reduce it to the second highest bet and reduce the raises, ect.
     # Put bets in order and sort positions accordingly
+    print("ln 621 adjusthighestbet start: " + str(sum(bets)))
     initialNumberPlayers = len(bets)
+    maxBet = np.amax(bets)
     tempBets = [0] * initialNumberPlayers
     betPositions = range(0, initialNumberPlayers)
     for position in range (0,initialNumberPlayers):
@@ -615,39 +628,38 @@ def adjustHighestBet(bets, chips, raises, maxBet, pot, bigBlind):
     # If one player bet more than everybody adjust the pot, ect.
     highestBetPosition = betPositions[0]
     nextHighestBetPosition = betPositions[0]
-    highestBet = tempbets[0]
-    nextHighestbet = tempBets[1]
-    if((highestBet > nextHighestbet) and (highestBet > bigBlind)):
-       chips[highestBetPosition] += (highestbet - nextHighestBet)
-       raises[highestBetPosition] += (highestbet - nextHighestBet)
-       bets[highestBetPosition] = bets[nextHighestBetPosition]
-       maxBet = nextHighestBet
-       pot -= (highestbet - nextHighestBet)
-    # Fill list with adjusted info
-    adjustedBetInfo = []
-    adjustedBetInfo.append(maxBet)
-    adjustedBetInfo.append(pot)
-    return adjustedBetInfo
+    highestBet = tempBets[0]
+    nextHighestBet = tempBets[1]
+    if(nextHighestBet < bigBlind):
+        nextHighestBet = bigBlind
+    betDifference = (highestBet - nextHighestBet)
+    if(highestBet > nextHighestBet):
+       chips[highestBetPosition] += betDifference
+       raises[highestBetPosition] -= betDifference
+       bets[highestBetPosition] = nextHighestBet
+    print("ln 641 adjusthighestbet end: " + str(sum(bets)))
 
 def doBetting(
-    bigBlind, initialNumberPlayers, chips, bets, raises, calls, folds,
-    startPosition, playerNames, cardStrengths, trainingMode):
+    trainingMode, bigBlind, chips, bets, raises, calls, folds,
+    startPosition, playerNames, cardStrengths):
     # Conduct a round of betting, update chips and return the final
     #position played from.
+    initialNumberPlayers = len(bets)
+    playersActive = initialNumberPlayers - sum(folds)
     # Reset round activity.
-    roundActive = True
-    
+    roundActive = True    
     # active = True indicates that a player has acted this round.
-    active = [False] * initialNumberPlayers 
+    active = [False] * initialNumberPlayers
+    position = startPosition
     while(roundActive):
         newBet = 0;
+        maxBet = np.amax(bets)
         # Check if the round is over.
         # Betting ends if there is 1 player left or if someone who
         #has acted already has nothing to call.
         if((playersActive == 1) or
-            (active[position] and (bets[position] == maxbet))):
+            (active[position] and (bets[position] == maxBet))):
             roundActive = False
-            position = (position - 1) % initialNumberPlayers
         else:
             if(not folds[position]):
                 # Check if player can bet.
@@ -657,22 +669,24 @@ def doBetting(
                     handStrength = cardStrengths[position]
                     newBet = getBet(
                         position, playerNames, AIPlayers, trainingMode,
-                        bigBlind, handStrength, bets, calls, raises,
-                        initialNumberPlayers, playersActive)
+                        bigBlind, handStrength, chips, bets, calls, raises)
             # Update all money lists after new bet is made.
-            postBetUpdate(
-                position, newBet, playerNames, chips, bets, calls, raises, active)
+            print("ln 676 before postbetupdate: " + str(sum(bets)))
+            updatedValues = postBetUpdate(
+                position, newBet, playerNames, chips, bets, calls, raises,
+                active, folds)
             playersActive = updatedValues[0]
-            maxBet = updatedValues[1]
-            pot = updatedValues[2]
-            betType = updatedValues[3]
+            betType = updatedValues[1]
+            position = (position + 1) % initialNumberPlayers
+            print("ln 682 after postbetupdate: " + str(sum(bets)))
     # Round of betting is finished.
     # Find player who bet the most; if nobody matched their bet then
     #reduce their bet to that of the second highest better.
-    adjustedBetInfo = adjustHighestBet(
-        bets, chips, raises, maxBet, pot, bigBlind)
-    maxBet = adjustedBetInfo[0]
-    pot = adjustedBetInfo[1]
+    print("ln 687 before adjusthighestbet: " + str(sum(bets)))
+    adjustHighestBet(bets, chips, raises, bigBlind)
+    print("ln 687 after adjusthighestbet: " + str(sum(bets)))
+    # Return the position where betting will continue next round
+    return position
 
 def sortHandRanks(handRanks):    
     handRankPositions = range(0,len(handRanks))
@@ -685,12 +699,12 @@ def sortHandRanks(handRanks):
                 temp = handRanks[i]
                 handRanks[i] = handRanks[j]
                 handRanks[j] = temp
-                temp = positions[i]
+                temp = handRankPositions[i]
                 handRankPositions[i] = handRankPositions[j]
                 handRankPositions[j] = temp
     return handRankPositions
 
-def getHandRankPositions(playerCards, communityCards, folds):
+def rankPositions(playerCards, communityCards, folds):
     initialNumberPlayers = len(folds)
     handRanks = [0] * initialNumberPlayers
     holeCards = [0] * 2
@@ -709,31 +723,32 @@ def getHandRankPositions(playerCards, communityCards, folds):
 def giveWinnings(
     chips, bets, folds, playerNames, playerCards, communityCards,
     trainingMode):
-    initialnumberPlayers = len(chips)
+    initialNumberPlayers = len(bets)
     # Print all players' cards
     if(not trainingMode):
         for position in range(0, initialNumberPlayers):
             if(not folds[position]):
-                print playernames[position] + "'s cards are \n"
+                print "\n" + playerNames[position] + "'s cards are"
                 for i in range(0,2):
                     suitTemp = cardIndexToSuit(playerCards[position][i])
                     cardNumberTemp = cardIndexToNumber(
                         playerCards[position][i])
                     print suitTemp + cardNumberTemp
     # Find the position of the winner(s).
-    winnerPositions = findWinner(playerCards, communityCards, folds)
+    winnerPositions = rankPositions(playerCards, communityCards, folds)
     # Loop through all players to collect their winnings.
     for i in range(0, initialNumberPlayers):
         if(not folds[winnerPositions[i]]):
             sumWinnings = 0
             winnerBet = bets[winnerPositions[i]]
             if(not trainingMode):
-                print "The "
-                if(i == 0):
-                    print "first "
-                else:
-                    print "next "
-                print "winner is " + playerNames[winnerPositions[i]] + "\n"
+                if(winnerBet > 0):
+                    print "The",
+                    if(i == 0):
+                        print "first",
+                    else:
+                        print "next",
+                    print "winner is " + playerNames[winnerPositions[i]] + "\n"
             # Loop through all players to take winnings from.
             for j in range(0, initialNumberPlayers):
                 # If the winner has a higher bet then take all of the
@@ -765,45 +780,52 @@ def playhand(
     playerCards = np.zeros((2 * initialNumberPlayers,2))
     communityCards = np.zeros(5)
     existingCards = np.zeros((initialNumberPlayers * 2) + 5)
+    # Find the position to start play from.
+    actionPosition = (dealerPosition + 3) % initialNumberPlayers
     # Set the blinds.
-    blindInfo = setBlinds(dealerPosition, initialNumberPlayers, bets,
-        chips, calls)
+    setBlinds(dealerPosition, initialNumberPlayers, bets, chips, calls)
     # Loop through all rounds of betting.
     for roundNumber in range (1,5):
         # Deal cards for this round and print community cards if not
         #in training mode.
         deal(
-        roundNumber, dealerPosition, manualDealing, initialNumberPlayers,
-        trainingMode, AIPlayers, playerNames, folds, playerCards,
-        communityCards, existingCards)
+        roundNumber, dealerPosition, manualDealing, trainingMode, AIPlayers,
+        playerNames, folds, playerCards, communityCards, existingCards)
         # Get the strength of each player's hand.
         cardStrengths = [0] * initialNumberPlayers
+        holeCards = [0] * 2
         for position in range(0,initialNumberPlayers):
-            if(not folds[position]):
+            # Only check card strength if a player is not human, is not
+            #folded, and has chips to bet
+            checkCardStrength = ((not folds[position]) and AIPlayers[position]
+                and (chips[position] > 0))
+            if(checkCardStrength):
                 holeCards[0] = playerCards[position][0]
                 holeCards[1] = playerCards[position][1]
                 cardStrengths[position] = getHandStrength(
                     holeCards, communityCards, roundNumber)
         # Begin the betting.
-        doBetting(
-        bigBlind, initialNumberPlayers, chips, bets, raises, calls, folds,
-        startPosition, playerNames, cardStrengths, trainingMode)
-    giveWinnings()
+        # doBetting returns the position to continue betting from
+        actionPosition = doBetting(
+            trainingMode, bigBlind, chips, bets, raises, calls, folds,
+            actionPosition, playerNames, cardStrengths)
+    giveWinnings(
+        chips, bets, folds, playerNames, playerCards, communityCards,
+        trainingMode)
+    print "Player chips are \n"
+    print chips
 
 # Play one example game.
 playerNames = ["Hugh", "Robin", "Pookey"]
-initialChips = [1000,200,50]
+initialChips = [1000,500,300]
 AIPlayers = [False, False, False]
 bigBlind = 100
-dealerPosition = 0
-manualDealing = False
+dealerPosition = 1
+manualDealing = True
 trainingMode = False
 
-
-'''
 # Test implementation
 playhand(
     playerNames=playerNames, initialChips=initialChips,
     AIPlayers=AIPlayers, bigBlind=100, dealerPosition=dealerPosition,
     manualDealing = manualDealing, trainingMode = trainingMode)
-'''
