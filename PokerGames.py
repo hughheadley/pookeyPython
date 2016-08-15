@@ -3,11 +3,15 @@
 from __future__ import division
 import numpy as np
 import random
+import datetime
 from deuces import Card, Evaluator
 
 random.seed()
+# Create the poker hand evaluator.
+evaluator = Evaluator()
 
-def setBlinds(dealerPosition, initialNumberPlayers, bets, chips, calls):
+def setBlinds(dealerPosition, bets, chips, calls):
+    initialNumberPlayers = len(bets)
     smallBlindPosition = (dealerPosition + 1) % initialNumberPlayers
     bigBlindPosition = (dealerPosition + 2) % initialNumberPlayers
     # Check if player can afford the full small blind.
@@ -250,7 +254,6 @@ def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
         opponentHand = setUpDeucesCards(opponentCards)
         board = setUpDeucesCards(communityCards)
         # Evaluate hand ranks.
-        evaluator = Evaluator()
         myRank = evaluator.evaluate(board, myHand)
         opponentRank = evaluator.evaluate(board, opponentHand)
         # Compare hand ranks. Lower rank indicates better hand.
@@ -262,6 +265,7 @@ def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
         for j in range(communityCardCount + 2, 9):
             existingCards[j] = 0 
     handStrength = (winCount / sampleSize)
+    print("handstrength is " + str(handStrength))
     return handStrength
 
 def manualDealRoundOne(
@@ -547,7 +551,6 @@ def postBetUpdate(
     position, newBet, playerNames, chips, bets, calls, raises, active, folds):
     # After a new bet update folds, chips, bets, calls, raises lists.
     # Return a list with new pot, playersActive and the type of bet made.
-    print("ln 551 postbetupdate start: " + str(sum(bets)))
     initialNumberPlayers = len(bets)
     playersActive = initialNumberPlayers - sum(folds)
     oldMaxBet = np.amax(bets)
@@ -597,7 +600,6 @@ def postBetUpdate(
     updatedValues.append(playersActive)
     # Store betType for later analysis/learning
     updatedValues.append(betType)
-    print("ln 602 postbetupdate end: " + str(sum(bets)))
     return updatedValues
 
 def sortBets(bets, positions):
@@ -617,7 +619,6 @@ def adjustHighestBet(bets, chips, raises, bigBlind):
     # Find the player who bet the most; if nobody matched their bet then
     #reduce it to the second highest bet and reduce the raises, ect.
     # Put bets in order and sort positions accordingly
-    print("ln 621 adjusthighestbet start: " + str(sum(bets)))
     initialNumberPlayers = len(bets)
     maxBet = np.amax(bets)
     tempBets = [0] * initialNumberPlayers
@@ -637,7 +638,6 @@ def adjustHighestBet(bets, chips, raises, bigBlind):
        chips[highestBetPosition] += betDifference
        raises[highestBetPosition] -= betDifference
        bets[highestBetPosition] = nextHighestBet
-    print("ln 641 adjusthighestbet end: " + str(sum(bets)))
 
 def doBetting(
     trainingMode, bigBlind, chips, bets, raises, calls, folds,
@@ -671,20 +671,16 @@ def doBetting(
                         position, playerNames, AIPlayers, trainingMode,
                         bigBlind, handStrength, chips, bets, calls, raises)
             # Update all money lists after new bet is made.
-            print("ln 676 before postbetupdate: " + str(sum(bets)))
             updatedValues = postBetUpdate(
                 position, newBet, playerNames, chips, bets, calls, raises,
                 active, folds)
             playersActive = updatedValues[0]
             betType = updatedValues[1]
             position = (position + 1) % initialNumberPlayers
-            print("ln 682 after postbetupdate: " + str(sum(bets)))
     # Round of betting is finished.
     # Find player who bet the most; if nobody matched their bet then
     #reduce their bet to that of the second highest better.
-    print("ln 687 before adjusthighestbet: " + str(sum(bets)))
     adjustHighestBet(bets, chips, raises, bigBlind)
-    print("ln 687 after adjusthighestbet: " + str(sum(bets)))
     # Return the position where betting will continue next round
     return position
 
@@ -692,7 +688,7 @@ def sortHandRanks(handRanks):
     handRankPositions = range(0,len(handRanks))
     # Put handRanks list in order lowest to highest and order positions
     #so that they match their handRanks.
-    # A lower hand rank indicates a better hand
+    # A lower hand rank indicates a better hand.
     for i in range(0, len(handRanks)):
         for j in range(0, len(handRanks)):
             if(handRanks[i] < handRanks[j]):
@@ -704,21 +700,73 @@ def sortHandRanks(handRanks):
                 handRankPositions[j] = temp
     return handRankPositions
 
-def rankPositions(playerCards, communityCards, folds):
+def rankPositions(playerCards, communityCards, folds, handRanks):
+    # Find hand ranks and put players in order of best hand to worst.
     initialNumberPlayers = len(folds)
-    handRanks = [0] * initialNumberPlayers
     holeCards = [0] * 2
+    foldedHandRank = 10000 # A score worse than any non-folded outcome.
+    print "communityCards: \n"
+    print communityCards
     board = setUpDeucesCards(communityCards)
     evaluator = Evaluator()
     for position in range(0, initialNumberPlayers):
-        holeCards[0] = playerCards[position][0]
-        holeCards[1] = playerCards[position][1]
-        hand = setUpDeucesCards(holeCards)
-        # Evaluate hand rank.
-        handRanks[position] = evaluator.evaluate(board, hand)
-    # Sort positions by hand ranks lowest-highest    
+        if(not folds[position]):
+            holeCards[0] = playerCards[position][0]
+            holeCards[1] = playerCards[position][1]
+            print "holeCards: \n"
+            print holeCards
+            hand = setUpDeucesCards(holeCards)
+            # Evaluate hand rank.
+            handRanks[position] = evaluator.evaluate(board, hand)
+        else:
+            handRanks[position] = foldedHandRank
+    # Sort positions by hand ranks lowest-highest.
     handRankPositions = sortHandRanks(handRanks)
     return handRankPositions
+
+def giveTiedWinnings(firstTieIndex, bets, chips, handScores, winnerPositions):
+    initialNumberPlayers = len(bets)
+    # A lower handScore is a better hand.
+    # Find how many players have equal hands.
+    tiedPlayerCount = 0
+    winningHandScore = handScores[firstTieIndex]
+    for i in range(firstTieIndex, initialNumberPlayers):
+        if(handScores[i] == winningHandScore):
+            tiedPlayerCount += 1
+    # Find smallest bet by a tied winner.
+    minBetHandScoreRank = firstTieIndex
+    minBetPosition = winnerPositions[minBetHandScoreRank]
+    minBet = bets[minBetPosition]
+    for i in range(firstTieIndex, firstTieIndex + tiedPlayerCount):
+        if(bets[winnerPositions[i]] < minBet):
+            minBetHandScoreRank = i
+            minBetPosition = winnerPositions[i]
+            minBet = bets[minBetPosition]
+    # In the ordered winner positions array swap the first tied player
+    #with the minBet tied player.
+    winnerPositions[minBetHandScoreRank] = winnerPositions[firstTieIndex]
+    winnerPositions[firstTieIndex] = minBetPosition 
+    # Now sum up all the chips owed to player in firstTieIndex.
+    # Loop through all players to take winnings from.
+    winnerBet = bets[minBetPosition]
+    sumWinnings = 0
+    for i in range(0, initialNumberPlayers):
+        # If the winner has a higher bet then take all of the loser's
+        #money.
+        if(winnerBet >= bets[i]):
+            sumWinnings += bets[i]
+            bets[i] = 0
+        else:
+            sumWinnings += winnerBet
+            bets[i] -= winnerBet
+    # Split the totaled chips between the tied winners' chip stacks.
+    splitChips = int(sumWinnings / tiedPlayerCount)
+    for i in range(firstTieIndex, firstTieIndex + tiedPlayerCount):
+        chips[winnerPositions[i]] += splitChips
+    # Chips missed from rounding error are given to the first tied
+    #player.
+    roundingErrorChips = sumWinnings - (splitChips * tiedPlayerCount)
+    chips[winnerPositions[firstTieIndex]] += roundingErrorChips
 
 def giveWinnings(
     chips, bets, folds, playerNames, playerCards, communityCards,
@@ -734,10 +782,13 @@ def giveWinnings(
                     cardNumberTemp = cardIndexToNumber(
                         playerCards[position][i])
                     print suitTemp + cardNumberTemp
-    # Find the position of the winner(s).
-    winnerPositions = rankPositions(playerCards, communityCards, folds)
+    # Find the position of the winner(s) and their hand scores (lower
+    #scores are better).
+    handScores = [0] * initialNumberPlayers
+    winnerPositions = rankPositions(
+        playerCards, communityCards, folds, handScores)
     # Loop through all players to collect their winnings.
-    for i in range(0, initialNumberPlayers):
+    for i in range(0, initialNumberPlayers - sum(folds) - 1):
         if(not folds[winnerPositions[i]]):
             sumWinnings = 0
             winnerBet = bets[winnerPositions[i]]
@@ -749,18 +800,30 @@ def giveWinnings(
                     else:
                         print "next",
                     print "winner is " + playerNames[winnerPositions[i]] + "\n"
-            # Loop through all players to take winnings from.
-            for j in range(0, initialNumberPlayers):
-                # If the winner has a higher bet then take all of the
-                #loser's money.
-                if(winnerBet >= bets[j]):
-                    sumWinnings += bets[j]
-                    bets[j] = 0
-                else:
-                    sumWinnings += winnerBet
-                    bets[j] -= winnerBet
-            # Add the totaled chips to the winner's chip stack
-            chips[winnerPositions[i]] += sumWinnings
+            # Test if it is a split pot.
+            print "handscores:\n"
+            print handScores
+            print "winningPositions[" + str(i) + "] : " + str(handScores[i])
+            print "winningPositions[" + str(i+1) + "] : " + str(handScores[i+1])
+            thisWinnerHandScore = handScores[i]
+            nextWinnerHandScore = handScores[i + 1]
+            if(thisWinnerHandScore == nextWinnerHandScore):
+                # Split pot.
+                # Share the winnings between the tied players.
+                giveTiedWinnings(i, bets, chips, handScores, winnerPositions)
+            else:
+                # Loop through all players to take winnings from.
+                for j in range(0, initialNumberPlayers):
+                    # If the winner has a higher bet then take all of
+                    #the loser's money.
+                    if(winnerBet >= bets[j]):
+                        sumWinnings += bets[j]
+                        bets[j] = 0
+                    else:
+                        sumWinnings += winnerBet
+                        bets[j] -= winnerBet
+                # Add the totaled chips to the winner's chip stack.
+                chips[winnerPositions[i]] += sumWinnings
 
 def playhand(
     playerNames, initialChips, AIPlayers, bigBlind, dealerPosition,
@@ -783,7 +846,7 @@ def playhand(
     # Find the position to start play from.
     actionPosition = (dealerPosition + 3) % initialNumberPlayers
     # Set the blinds.
-    setBlinds(dealerPosition, initialNumberPlayers, bets, chips, calls)
+    setBlinds(dealerPosition, bets, chips, calls)
     # Loop through all rounds of betting.
     for roundNumber in range (1,5):
         # Deal cards for this round and print community cards if not
