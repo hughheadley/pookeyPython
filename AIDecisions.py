@@ -83,7 +83,7 @@ def geneticNNFeedForward(layerSizes, inputLayer, allWeights, activations):
         # Set up weights for this feed forward layer.
         weightsTemp = allWeights[layerIndex][:][:]
         weights = np.copy(weightsTemp)
-        weights.resize(layerSizes[layerIndex],layerSizes[layerIndex + 1])        
+        weights.resize(layerSizes[layerIndex],layerSizes[layerIndex + 1])
         activation = activations[layerIndex]
         nextLayerSize = layerSizes[layerIndex + 1]
         nextLayer = oneLayerFeedForward(
@@ -107,7 +107,7 @@ def normalizeNormalVariable(variable, mean, stDev):
 
 def prepareGeneticInputs(
     pot, handStrength, callValue, bigBlind, existingBet, roundNumber,
-    playersActive, initialNumberPlayers, raises, initialChipsAverage):
+    playersActive, initialNumberPlayers, folds, raises, initialChipsAverage):
     # Transform/normalizing is irregular.
     inputLayer = [0] * 12
     inputLayer[0] = 1 # Bias input.
@@ -164,7 +164,7 @@ def geneticNNDecision(
     # Put game states into input. Transform and normalize the inputs.
     inputLayer = prepareGeneticInputs(
         pot, handStrength, callValue, bigBlind, existingBet, roundNumber,
-        playersActive, initialNumberPlayers, raises, initialChipsAverage)
+        playersActive, initialNumberPlayers, folds, raises, initialChipsAverage)
     # Put inputs through NN.
     # Final layer weights are not used for NN.
     layerSizesTemp = layerSizes[0:(len(layerSizes) - 1)]

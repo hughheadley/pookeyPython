@@ -4,13 +4,15 @@ from __future__ import division
 import numpy as np
 import random
 import datetime
+import AIDecisions
 from deuces import Card, Evaluator
+import os
 
 random.seed()
 # Create the poker hand evaluator.
 evaluator = Evaluator()
 
-def setBlinds(dealerPosition, bets, chips, calls):
+def setBlinds(dealerPosition, bets, chips, calls, bigBlind):
     initialNumberPlayers = len(bets)
     smallBlindPosition = (dealerPosition + 1) % initialNumberPlayers
     bigBlindPosition = (dealerPosition + 2) % initialNumberPlayers
@@ -265,7 +267,6 @@ def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
         for j in range(communityCardCount + 2, 9):
             existingCards[j] = 0 
     handStrength = (winCount / sampleSize)
-    print("handstrength is " + str(handStrength))
     return handStrength
 
 def manualDealRoundOne(
@@ -436,17 +437,40 @@ def deal(
                 initialNumberPlayers, trainingMode, playerCards,
                 communityCards, existingCards)
 
-def getAIBet(callValue, bigBlind, handStrength, chips, position):
-    # Use simple betting scheme for now.
-    if(handStrength > 0.5):
-        newBet = callValue + bigBlind
-    elif(handStrength > 0.3):
-        newBet = callValue
+def getDecisionType(decisionRefNumber):
+    # Open decisionType.txt file in the relevant folder to find the
+    #decision method used by this AI player.
+    currentPath = os.getcwd()
+    subFolderFile = ("decisionMakers/decisionMaker" + str(decisionRefNumber)
+    + "/decisionType.txt")
+    filePath = os.path.join(currentPath, subFolderFile)    
+    with open(filePath,"r") as decisionfile:
+        for line in decisionfile:
+            decisionType = line.split(None, 1)[0]
+    return decisionType
+
+def getAIBet(
+    decisionMakerReference, fileNames, position, bigBlind, roundNumber,
+    handStrength, folds, chips, bets, raises):
+    decisionMethod = getDecisionType(decisionMakerReference)
+    newBet = 0
+    if(decisionMethod == "simple"):
+        newBet = AIDecisions.simpleAIBet(bigBlind, handStrength, bets, position)
+    elif(decisionMethod == "geneticNN"):
+        newBet = AIDecisions.geneticNNDecision(
+            decisionMakerReference, position, handStrength, roundNumber,
+            bigBlind, folds, chips, bets, raises)
     else:
-        newBet = 0
+        prompt = ("Did not find valid decisionType for decision reference "
+            + str(decisionMakerReference))
+        temp = raw_input(prompt)
+    netBet = int(newBet)
     # Go all-in if newBet is greater than chip count.
+    # Bet 0 if newBet is less that zero.
     if(newBet > chips[position]):
         newBet = chips[position]
+    elif(newBet < 0):
+        newBet = 0
     return newBet
 
 def checkHumanBetValid(newBetString, chipCount, betsMade, callValue, maxBet):
@@ -501,18 +525,19 @@ def getHumanBet(position, playerName, chipCount, bets):
             return newBet
 
 def getBet(
-    position, playerNames, AIPlayers, trainingMode, bigBlind,
-    handStrength, chips, bets, calls, raises):
+    decisionRef, fileNames, position, playerNames, AIPlayers, trainingMode,
+    bigBlind, roundNumber, handStrength, folds, chips, bets, calls, raises):
     # Calculate values used in decising bet.
     initialNumberPlayers = len(bets)
     maxBet = np.amax(bets)
     callValue = maxBet - bets[position]
     if(AIPlayers[position]):
         newBet = getAIBet(
-            callValue, bigBlind, handStrength, chips, position)
+            decisionRef, fileNames, position, bigBlind, roundNumber,
+            handStrength, folds, chips, bets, raises)
     else:
-        newBet = getHumanBet(position, playerNames[position], chips[position],
-            bets)
+        newBet = getHumanBet(
+            position, playerNames[position], chips[position], bets)
     # Final check to see if bet is valid.
     betValidity = (((newBet >= callValue) and (newBet <= chips[position]))
         or (newBet == chips[position]) or (newBet == 0))
@@ -544,11 +569,12 @@ def betActionType(newBet, position, chips, bets):
         elif(newBet == chips[position]):
             return "all-in call"
     # If newBet does not satisfy any of the above cases then there is an
-    #error. Notify user with raw_input so that script pauses
+    #error. Notify user with raw_input so that script pauses.
     raw_input("Error: betActionType cannot determine action")
 
 def postBetUpdate(
-    position, newBet, playerNames, chips, bets, calls, raises, active, folds):
+    position, newBet, playerNames, chips, bets, calls, raises, active, folds,
+    trainingMode):
     # After a new bet update folds, chips, bets, calls, raises lists.
     # Return a list with new pot, playersActive and the type of bet made.
     initialNumberPlayers = len(bets)
@@ -570,7 +596,7 @@ def postBetUpdate(
         if(not trainingMode):
             print("\n" + playerNames[position] + " has called")
     elif(betType == "cannot bet"):
-        # Do nothing
+        # Do nothing.
         temp = 0
     else:
         # Player calls/raises.
@@ -595,16 +621,16 @@ def postBetUpdate(
                 playerNames[position] + " has bet " + str(int(newBet))
                 + ", " + playerNames[position] + " now has "
                 + str(int(chips[position])) + " chips.\n")
-    # Count the number of players still active
+    # Count the number of players still active.
     updatedValues = []
     updatedValues.append(playersActive)
-    # Store betType for later analysis/learning
+    # Store betType for later analysis/learning.
     updatedValues.append(betType)
     return updatedValues
 
 def sortBets(bets, positions):
     # Put bets array in order highest to lower and order positions so
-    #that they match their bets
+    #that they match their bets.
     for i in range(0, len(bets)):
         for j in range(0, len(bets)):
             if(bets[i] > bets[j]):
@@ -618,7 +644,7 @@ def sortBets(bets, positions):
 def adjustHighestBet(bets, chips, raises, bigBlind):
     # Find the player who bet the most; if nobody matched their bet then
     #reduce it to the second highest bet and reduce the raises, ect.
-    # Put bets in order and sort positions accordingly
+    # Put bets in order and sort positions accordingly.
     initialNumberPlayers = len(bets)
     maxBet = np.amax(bets)
     tempBets = [0] * initialNumberPlayers
@@ -640,8 +666,9 @@ def adjustHighestBet(bets, chips, raises, bigBlind):
        bets[highestBetPosition] = nextHighestBet
 
 def doBetting(
-    trainingMode, bigBlind, chips, bets, raises, calls, folds,
-    startPosition, playerNames, cardStrengths):
+    trainingMode, bigBlind, roundNumber, chips, bets, raises, calls, folds,
+    startPosition, playerNames, cardStrengths, AIPlayers, decisionRef = 0,
+    fileNames = []):
     # Conduct a round of betting, update chips and return the final
     #position played from.
     initialNumberPlayers = len(bets)
@@ -668,12 +695,13 @@ def doBetting(
                 else:
                     handStrength = cardStrengths[position]
                     newBet = getBet(
-                        position, playerNames, AIPlayers, trainingMode,
-                        bigBlind, handStrength, chips, bets, calls, raises)
+                        decisionRef, fileNames, position, playerNames,
+                        AIPlayers, trainingMode, bigBlind, roundNumber,
+                        handStrength, folds, chips, bets, calls, raises)
             # Update all money lists after new bet is made.
             updatedValues = postBetUpdate(
                 position, newBet, playerNames, chips, bets, calls, raises,
-                active, folds)
+                active, folds, trainingMode)
             playersActive = updatedValues[0]
             betType = updatedValues[1]
             position = (position + 1) % initialNumberPlayers
@@ -681,7 +709,7 @@ def doBetting(
     # Find player who bet the most; if nobody matched their bet then
     #reduce their bet to that of the second highest better.
     adjustHighestBet(bets, chips, raises, bigBlind)
-    # Return the position where betting will continue next round
+    # Return the position where betting will continue next round.
     return position
 
 def sortHandRanks(handRanks):    
@@ -705,16 +733,12 @@ def rankPositions(playerCards, communityCards, folds, handRanks):
     initialNumberPlayers = len(folds)
     holeCards = [0] * 2
     foldedHandRank = 10000 # A score worse than any non-folded outcome.
-    print "communityCards: \n"
-    print communityCards
     board = setUpDeucesCards(communityCards)
     evaluator = Evaluator()
     for position in range(0, initialNumberPlayers):
         if(not folds[position]):
             holeCards[0] = playerCards[position][0]
             holeCards[1] = playerCards[position][1]
-            print "holeCards: \n"
-            print holeCards
             hand = setUpDeucesCards(holeCards)
             # Evaluate hand rank.
             handRanks[position] = evaluator.evaluate(board, hand)
@@ -772,7 +796,7 @@ def giveWinnings(
     chips, bets, folds, playerNames, playerCards, communityCards,
     trainingMode):
     initialNumberPlayers = len(bets)
-    # Print all players' cards
+    # Print all players' cards.
     if(not trainingMode):
         for position in range(0, initialNumberPlayers):
             if(not folds[position]):
@@ -801,10 +825,6 @@ def giveWinnings(
                         print "next",
                     print "winner is " + playerNames[winnerPositions[i]] + "\n"
             # Test if it is a split pot.
-            print "handscores:\n"
-            print handScores
-            print "winningPositions[" + str(i) + "] : " + str(handScores[i])
-            print "winningPositions[" + str(i+1) + "] : " + str(handScores[i+1])
             thisWinnerHandScore = handScores[i]
             nextWinnerHandScore = handScores[i + 1]
             if(thisWinnerHandScore == nextWinnerHandScore):
@@ -826,17 +846,17 @@ def giveWinnings(
                 chips[winnerPositions[i]] += sumWinnings
 
 def playhand(
-    playerNames, initialChips, AIPlayers, bigBlind, dealerPosition,
-    manualDealing, trainingMode):
+    playerNames, initialChips, bigBlind, dealerPosition,
+    manualDealing, trainingMode, AIPlayers, decisionRefs, fileNames):
     # playhand takes the players' names and game situation and plays one
     #hand of poker.
     # Set initial values for the game.
     initialNumberPlayers = len(initialChips)
     activePlayerCount = initialNumberPlayers
-    chips = np.zeros(initialNumberPlayers)
     bets = np.zeros(initialNumberPlayers)
     calls = np.zeros(initialNumberPlayers)
     raises = np.zeros(initialNumberPlayers)
+    chips = np.zeros(initialNumberPlayers)
     for i in range(0,initialNumberPlayers):
         chips[i] = initialChips[i]
     folds = [False] * initialNumberPlayers
@@ -846,7 +866,9 @@ def playhand(
     # Find the position to start play from.
     actionPosition = (dealerPosition + 3) % initialNumberPlayers
     # Set the blinds.
-    setBlinds(dealerPosition, bets, chips, calls)
+    setBlinds(dealerPosition, bets, chips, calls, bigBlind)
+    # Set position to start betting
+    startPosition = (dealerPosition + 3) % initialNumberPlayers
     # Loop through all rounds of betting.
     for roundNumber in range (1,5):
         # Deal cards for this round and print community cards if not
@@ -868,27 +890,13 @@ def playhand(
                 cardStrengths[position] = getHandStrength(
                     holeCards, communityCards, roundNumber)
         # Begin the betting.
-        # doBetting returns the position to continue betting from
+        # doBetting returns the position to continue betting from.
         actionPosition = doBetting(
-            trainingMode, bigBlind, chips, bets, raises, calls, folds,
-            actionPosition, playerNames, cardStrengths)
+            trainingMode, bigBlind, roundNumber, chips, bets, raises, calls,
+            folds, startPosition, playerNames, cardStrengths, AIPlayers,
+            decisionRef = decisionRefs[position], fileNames = fileNames)
     giveWinnings(
         chips, bets, folds, playerNames, playerCards, communityCards,
         trainingMode)
-    print "Player chips are \n"
-    print chips
+    return chips
 
-# Play one example game.
-playerNames = ["Hugh", "Robin", "Pookey"]
-initialChips = [1000,500,300]
-AIPlayers = [False, False, False]
-bigBlind = 100
-dealerPosition = 1
-manualDealing = True
-trainingMode = False
-
-# Test implementation
-playhand(
-    playerNames=playerNames, initialChips=initialChips,
-    AIPlayers=AIPlayers, bigBlind=100, dealerPosition=dealerPosition,
-    manualDealing = manualDealing, trainingMode = trainingMode)
