@@ -7,6 +7,8 @@ import datetime
 import AIDecisions
 from deuces import Card, Evaluator
 import os
+import math
+import csv
 
 random.seed()
 # Create the poker hand evaluator.
@@ -245,16 +247,20 @@ def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
     winCount = 0
     opponentCards = [0] * 2
     for i in range(0, sampleSize):
+        # Use copy of communityCards for testing
+        communityCardsCopy = []
+        for j in range(0, communityCardCount):
+            communityCardsCopy.append(communityCards[j])
         # Generate opponent's cards and remaining community cards.
         for j in range(communityCardCount, 5):
-            communityCards[j] = dealCard(existingCards)
-            existingCards[j + 2] = communityCards[j]
+            communityCardsCopy.append(dealCard(existingCards))
+            existingCards[j + 2] = communityCardsCopy[j]
         for j in range(0,2):
             opponentCards[j] = dealCard(existingCards)
-            existingCards[7 + j] = opponentCards[j]
+            existingCards[j + 7] = opponentCards[j]
         # Put opponent hand and community cards in deuces form.
         opponentHand = setUpDeucesCards(opponentCards)
-        board = setUpDeucesCards(communityCards)
+        board = setUpDeucesCards(communityCardsCopy)
         # Evaluate hand ranks.
         myRank = evaluator.evaluate(board, myHand)
         opponentRank = evaluator.evaluate(board, opponentHand)
@@ -672,7 +678,7 @@ def randomBet(bigBlind, position, chips, bets, callChance = 0.3):
     callValue = maxBet - betsMade
     chipCount = chips[position]
     # Decide if calling or raising.
-    randNumber = np.random.random()
+    randomNumber = np.random.random()
     if(randomNumber < callChance):
         # Call the bet.
         if(chipCount < callValue):
@@ -695,11 +701,63 @@ def randomBet(bigBlind, position, chips, bets, callChance = 0.3):
             newBet = int(2.71828 ** logRandomBet)
     return newBet
 
+def recordGameState(
+    position, newBet, bigBlind, roundNumber, chips, bets, raises, calls,
+    folds, cardStrength, holeCards, communityCards,
+    betRecordFile = "betRecords.csv"):
+    # Record the state of the game in a csv file.
+    # Calculate extra parameters to be recorded
+    pot = sum(bets)
+    maxBet = np.amax(bets)
+    callValue = maxBet - bets[position]
+    existingBet = bets[position]
+    initialNumberPlayers = len(folds)
+    playersActive = initialNumberPlayers - sum(folds)
+    initialChipsAverage = (sum(chips) + sum(bets)) / len(bets)
+    # Create a list gameState to contain all information.
+    gameState = []
+    # First entry is reserved for profit.
+    gameState.append(0)
+    gameState.append(newBet / bigBlind)
+    gameState.append(position)
+    gameState.append(pot / bigBlind)
+    gameState.append(cardStrength)
+    gameState.append(callValue / bigBlind)
+    gameState.append(existingBet / bigBlind)
+    gameState.append(roundNumber)
+    gameState.append(playersActive)
+    gameState.append(initialNumberPlayers)
+    gameState.append(initialChipsAverage / bigBlind)
+    gameState.extend(holeCards)
+    gameState.extend(communityCards)
+    gameState.extend(x / bigBlind for x in chips)
+    gameState.extend(x / bigBlind for x in bets)
+    gameState.extend(x / bigBlind for x in raises)
+    gameState.extend(x / bigBlind for x in calls)
+    gameState.extend(x * 1 for x in folds)
+    # Append list as a new line in csv.
+    with open(betRecordFile, 'a') as f:
+        writer = csv.writer(f)
+        writer.writerow(gameState)
+
+def recordProfit(profit, bigBlind, betRecordFile = "betRecords.csv"):
+    # Record profit in the final line of the csv file.
+    # Open csv as a 2D list.
+    csvData = csv.reader(open(betRecordFile))
+    lines = [l for l in csvData]
+    # Modify profit value.
+    lines[len(lines) -  1][0] = (profit / bigBlind)
+    print "profit in recordprofit is " + str(profit)
+    # Save modified list as csv file.
+    writer = csv.writer(open(betRecordFile, 'wb'))
+    writer.writerows(lines)
+
 def doBetting(
     trainingMode, bigBlind, roundNumber, chips, bets, raises, calls, folds,
-    startPosition, playerNames, cardStrengths, AIPlayers, decisionRef = 0,
-    fileNames = [], actionCount = False, actionToRecord = False,
-    betRecordFile = "betRecords.csv", callChance = 0.3):
+    startPosition, playerNames, cardStrengths, AIPlayers, playerCards,
+    communityCards, decisionRefs = [], fileNames = [], actionCount = False,
+    actionToRecord = False, betRecordFile = "betRecords.csv",
+    callChance = 0.3):
     # Conduct a round of betting, update chips and return the final
     #position played from.
     # If actionCount reaches actionToRecord then record the bet.
@@ -727,19 +785,34 @@ def doBetting(
                     print playerNames[position] + " cannot bet"
                 else:
                     handStrength = cardStrengths[position]
+                    if((len(decisionRefs) - 1) <= position):
+                        decisionRef = 0
+                    else:
+                        decisionRef = decisionRefs[position]
                     newBet = getBet(
                         decisionRef, fileNames, position, playerNames,
                         AIPlayers, trainingMode, bigBlind, roundNumber,
                         handStrength, folds, chips, bets, calls, raises)
-            # If recording this bet then make the bet random.
+            # If recording this bet then make the bet random, overwrie old
+            #bet made.
             if(actionToRecord is not False):
+                actionCount += 1
+                print "Action count was updated to " + str(actionCount)
                 if(actionCount == actionToRecord):
+                    print "This bet is being made random \n"
                     newBet = randomBet(
                         bigBlind, position, chips, bets,
                         callChance = callChance)
+                    print "random bet is " + str(newBet) + "\n"
                     recordedPosition = position
-                    saveGameState()
-                actionCount += 1
+                    holeCards = [0] * 2
+                    holeCards[0] = playerCards[position][0]
+                    holeCards[1] = playerCards[position][1]
+                    recordGameState(
+                        position, newBet, bigBlind, roundNumber, chips, bets,
+                        raises, calls, folds, cardStrengths[position],
+                        holeCards, communityCards,
+                        betRecordFile = betRecordFile)
             # Update all money lists after new bet is made.
             updatedValues = postBetUpdate(
                 position, newBet, playerNames, chips, bets, calls, raises,
@@ -896,15 +969,17 @@ def selectActionNumber(initialNumberPlayers):
     #that are made in a game.
     # Number of actions made in a game is approx 2.5 for every player.
     actionNumber = -1
-    meanActions = 4 + (1.4 * initialNumberPlayers)
+    meanActions = 5 + (1.4 * initialNumberPlayers)
     stDevActions = 4.7
-    while(actionNumber < 0):
+    while(actionNumber < 1):
+        # Minimum actionNumber is 1
         actionNumber = int(random.gauss(meanActions, stDevActions) + 0.5)
+    print "Action Number is " + str(actionNumber) + "\n"
     return actionNumber
 
 def playhand(
     playerNames, initialChips, bigBlind, dealerPosition,
-    manualDealing, trainingMode, AIPlayers, decisionRefs, fileNames,
+    manualDealing, trainingMode, AIPlayers, decisionRefs = [], fileNames = [],
     recordBets = False, betRecordFile = "betRecords.csv"):
     # playhand takes the players' details and starting chips and plays
     #one hand of poker.
@@ -929,11 +1004,12 @@ def playhand(
     actionPosition = (dealerPosition + 3) % initialNumberPlayers
     # Create necessary variables for recording bets
     actionCount = 0
-    recordedPosition = 0
+    recordedPosition = False
+    storedBetPosition = False
     if(recordBets):
         # Choose a random action on which to record game state and
         #new Bet.
-        recordActionNumber = selectMove(initialNumberPlayers)
+        recordActionNumber = selectActionNumber(initialNumberPlayers)
     else:
         recordActionNumber = False
     # Loop through all rounds of betting.
@@ -949,7 +1025,7 @@ def playhand(
         for position in range(0,initialNumberPlayers):
             # Only check card strength if a player is not human, is not
             #folded, and has chips to bet
-            checkCardStrength = ((not folds[position]) and AIPlayers[position]
+            checkCardStrength = ((not folds[position]) and (not AIPlayers[position])
                 and (chips[position] > 0))
             if(checkCardStrength):
                 holeCards[0] = playerCards[position][0]
@@ -957,19 +1033,27 @@ def playhand(
                 cardStrengths[position] = getHandStrength(
                     holeCards, communityCards, roundNumber)
         # Begin the betting.
-        # doBetting returns the position to continue betting from.
         bettingInfo = doBetting(
             trainingMode, bigBlind, roundNumber, chips, bets, raises, calls,
             folds, actionPosition, playerNames, cardStrengths, AIPlayers,
-            decisionRef = decisionRefs[position], fileNames = fileNames,
-            actionCount = actionCount, actionToRecord = recordActionNumber,
-            betRecordFile = betRecordFile)
+            playerCards, communityCards, decisionRefs = decisionRefs,
+            fileNames = fileNames, actionCount = actionCount,
+            actionToRecord = recordActionNumber, betRecordFile = betRecordFile)
         actionPosition = bettingInfo[0]
         actionCount = bettingInfo[1]
         recordedPosition = bettingInfo[2]
+        if(recordedPosition is not False):
+            storedBetPosition = recordedPosition
+    # Evaluate winners and give chips to winners.
     giveWinnings(
         chips, bets, folds, playerNames, playerCards, communityCards,
         trainingMode)
-    if(recordBets is not False):
-        recordProfit()
+    # Record profit for training data.
+    if(storedBetPosition is not False):
+        print "recorded pos is " + str(storedBetPosition)
+        print "final chips is " + str(chips[storedBetPosition])
+        print "initial chips is " + str(initialChips[storedBetPosition])
+        profit = (chips[storedBetPosition] - initialChips[storedBetPosition])
+        print "Profit ln 1067 is " + str(profit)
+        recordProfit(profit, bigBlind, betRecordFile = betRecordFile)
     return chips
