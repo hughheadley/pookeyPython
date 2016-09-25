@@ -107,8 +107,8 @@ def playRandomHand(
     # Play one hand.
     finalChips = PokerGames.playhand(
     playerNames, initialChips, bigBlind, dealerPosition,
-    manualDealing, trainingMode, AIPlayers, decisionRefs, fileNames)
-    profits = np.subtract(finalChips, initialChips)
+    manualDealing, trainingMode, AIPlayers, decisionRefs, fileNames,
+    recordBets = True)
     # Convert the chips list into a numpy array.
     np.asarray(finalChips)
     profits = np.subtract(finalChips, initialChips)
@@ -218,7 +218,7 @@ def monteCarloGames(
                 essentialPlayers.append(int(keyPlayers[keyIndex]))
         # Pick a random number of players to play a game.
         playerLimit = min(maxPlayers, len(refNumbers))
-        numberPlayers = np.random.randint(2, playerLimit)
+        numberPlayers = np.random.randint(2, playerLimit + 1)
         # Select random players.
         playerRefs = selectRandomPlayers(
             numberPlayers, refNumbers, essentialPlayers, playerDistribution)
@@ -238,6 +238,6 @@ def monteCarloGames(
     saveRefStats(resultsFile, refStats)
 
 # Test performance of decision makers 1-10
-players = range(0,11)
+players = range(1,11)
 print players
 monteCarloGames(players, sampleSize = 1000)
