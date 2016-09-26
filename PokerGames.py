@@ -708,7 +708,7 @@ def recordGameState(
     folds, cardStrength, holeCards, communityCards,
     betRecordFile = "betRecords.csv"):
     # Record the state of the game in a csv file.
-    # Calculate extra parameters to be recorded
+    # Calculate extra parameters to be recorded.
     initialNumberPlayers = len(folds)
     # Create a list gameState to contain all information.
     gameState = []
@@ -771,8 +771,9 @@ def doBetting(
         else:
             if(not folds[position]):
                 # Check if player can bet.
-                if((chips[position] == 0) and (not trainingMode)):
-                    print playerNames[position] + " cannot bet"
+                if(chips[position] == 0):
+                    if(not trainingMode):
+                        print playerNames[position] + " cannot bet"
                 else:
                     handStrength = cardStrengths[position]
                     if(len(decisionRefs) <= position):
@@ -783,6 +784,7 @@ def doBetting(
                         decisionRef, fileNames, position, playerNames,
                         AIPlayers, trainingMode, bigBlind, roundNumber,
                         handStrength, folds, chips, bets, calls, raises)
+                    newBet = int(newBet)
                     # If recording this bet then make the bet random,
                     #overwrie old bet made and record game state.
                     if(actionToRecord is not False):
@@ -791,6 +793,7 @@ def doBetting(
                             newBet = randomBet(
                                 bigBlind, position, chips, bets,
                                 callChance = callChance)
+                            newBet = int(newBet)
                             recordedPosition = position
                             holeCards = [0] * 2
                             holeCards[0] = playerCards[position][0]
@@ -956,8 +959,8 @@ def selectActionNumber(initialNumberPlayers):
     #that are made in a game.
     # Number of actions made in a game is approx 2.5 for every player.
     actionNumber = -1
-    meanActions = 0.96 + (1.99 * initialNumberPlayers)
-    stDevActions = 0.37 + (1.17 * initialNumberPlayers)
+    meanActions = -0.73 + (2.5 * initialNumberPlayers)
+    stDevActions = -0.52 + (1.43 * initialNumberPlayers)
     while(actionNumber < 1):
         # Minimum actionNumber is 1.
         actionNumber = int(random.gauss(meanActions, stDevActions) + 0.5)
@@ -1011,7 +1014,7 @@ def playhand(
         for position in range(0,initialNumberPlayers):
             # Only check card strength if a player is not human, is not
             #folded, and has chips to bet
-            checkCardStrength = ((not folds[position]) and (not AIPlayers[position])
+            checkCardStrength = ((not folds[position]) and (AIPlayers[position])
                 and (chips[position] > 0))
             if(checkCardStrength):
                 holeCards[0] = playerCards[position][0]
