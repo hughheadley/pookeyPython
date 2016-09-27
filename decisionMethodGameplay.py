@@ -1,3 +1,6 @@
+# This script plays various decision makers against each other to gather game
+#data and test perfomance.
+
 from __future__ import division
 import numpy as np
 import random
@@ -184,7 +187,8 @@ def saveRefStats(fileName, refStats):
 def monteCarloGames(
     refNumbers, playerDistribution = "uniform", keyPlayers = False,
     bigBlind = 100, minChips = 10, maxChips = 200, sampleSize = 1000,
-    maxPlayers = 8, resultsFile = "decisionTest.csv"):
+    maxPlayers = 8,
+    resultsFile = "decisionMakers/decisionMakersComparison.csv"):
     # Play hands with random chip counts to test player performance in
     #random scenarios.
     # refNumbers is a list of all refNumbers which can play.

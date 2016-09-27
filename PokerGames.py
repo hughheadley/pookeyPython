@@ -706,7 +706,7 @@ def randomBet(bigBlind, position, chips, bets, callChance = 0.3):
 def recordGameState(
     position, newBet, bigBlind, roundNumber, chips, bets, raises, calls,
     folds, cardStrength, holeCards, communityCards,
-    betRecordFile = "betRecords.csv"):
+    betRecordFile = "trainingDump/betRecords.csv"):
     # Record the state of the game in a csv file.
     # Calculate extra parameters to be recorded.
     initialNumberPlayers = len(folds)
@@ -731,7 +731,8 @@ def recordGameState(
         writer = csv.writer(f)
         writer.writerow(gameState)
 
-def recordProfit(profit, bigBlind, betRecordFile = "betRecords.csv"):
+def recordProfit(
+    profit, bigBlind, betRecordFile = "trainingDump/betRecords.csv"):
     # Record profit in the final line of the csv file.
     # Open csv as a 2D list.
     csvData = csv.reader(open(betRecordFile))
@@ -746,7 +747,7 @@ def doBetting(
     trainingMode, bigBlind, roundNumber, chips, bets, raises, calls, folds,
     startPosition, playerNames, cardStrengths, AIPlayers, playerCards,
     communityCards, decisionRefs = [], fileNames = [], actionCount = False,
-    actionToRecord = False, betRecordFile = "betRecords.csv",
+    actionToRecord = False, betRecordFile = "trainingDump/betRecords.csv",
     callChance = 0.3):
     # Conduct a round of betting, update chips and return the final
     #position played from.

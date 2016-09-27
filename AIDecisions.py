@@ -146,74 +146,97 @@ def prepareGeneticInputs(
 def prepareFirstNNInputs(betConditions):
     # Take betting conditions and return inputs.
     # betConditions contains new bet as first entry and the game state.
-    # Turn bet conditions into game information
+    # Turn bet conditions into game information.
+    # 14 distrinct inputs are created.
     newBet = betConditions[0]
-    initialNumberPlayers = betConditions[1]
-    position = betConditions[2]
-    cardStrength = betConditions[3]
+    initialNumberPlayers = int(betConditions[1])
+    position = int(betConditions[2])
+    roundNumber = betConditions[3]
+    cardStrength = betConditions[4]
     bets = np.zeros(initialNumberPlayers)
     calls = np.zeros(initialNumberPlayers)
     raises = np.zeros(initialNumberPlayers)
     chips = np.zeros(initialNumberPlayers)
     folds = np.zeros(initialNumberPlayers)
-    for i in range(0, initialNumberPlayers):
-        chips[j] = betConditions[11 + j]
-        bets[j] = betConditions[11 + (2 * j)]
-        raises[j] = betConditions[11 + (3 * j)]
-        calls[j] = betConditions[11 + (4 * j)]
-        folds[j] = betConditions[11 + (5 * j)]
+    for j in range(0, initialNumberPlayers):
+        chips[j] = betConditions[12 + j]
+        bets[j] = betConditions[12 + j + initialNumberPlayers]
+        raises[j] = betConditions[12 + j + (initialNumberPlayers * 2)]
+        calls[j] = betConditions[12 + j + (initialNumberPlayers * 3)]
+        folds[j] = betConditions[12 + j + (initialNumberPlayers * 4)]
+    playersActive = initialNumberPlayers - sum(folds)
+    """
+    print("PLayers active is")
+    print(playersActive)
+    print("initialNumberPlayers is")
+    print(initialNumberPlayers)
+    print("bets is")
+    print(bets)
+    print("calls is")
+    print(calls)
+    print("raises is")
+    print(raises)
+    print("chips is")
+    print(chips)
+    print("folds is")
+    print(folds)
+    raw_input("enter anything")
+    """
     # Calculate predictive parameters
     maxBet = np.amax(bets)
     callValue = maxBet - bets[position]
     pot = sum(bets)
     betsMade = bets[position]
     initialChipsAverage = sum(bets) + sum(chips)
+    # Create normalized input layer.
     inputLayer = np.asarray([])
     if(newBet > 0):
-        inputLayer.append(normalizeUniformVariable(
-            math.log(newBet), 0, 1))
-        np.append(inputLayer, 1)
+        inputLayer = np.append(inputLayer, normalizeNormalVariable(
+            math.log(newBet), 0.26, 0.80))
+        inputLayer = np.append(inputLayer, 1)
     else:
         # Append -1 to to indicate newBet is 0.
-        np.append(inputLayer, 0)
-        np.append(inputLayer, -1)
-    np.append(inputLayer, normalizeUniformVariable(
-        handStrength, 0.475, 0.45))
-    np.append(inputLayer, normalizeUniformVariable(roundNumber, 2.5, 3.0))
-    np.append(inputLayer, normalizeNormalVariable(
-        playersActive, 4.229, 1.640))
-    np.append(inputLayer, normalizeUniformVariable(
-        initialNumberPlayers, 5.0, 6.0))
+        inputLayer = np.append(inputLayer, 0)
+        inputLayer = np.append(inputLayer, -1)
+    inputLayer = np.append(inputLayer, normalizeNormalVariable(
+        cardStrength, 0.495, 0.19))
+    inputLayer = np.append(inputLayer, normalizeNormalVariable(
+        roundNumber, 2.09, 1.16))
+    inputLayer = np.append(inputLayer, normalizeNormalVariable(
+        playersActive, 4.27, 1.94))
+    inputLayer = np.append(inputLayer, normalizeNormalVariable(
+        initialNumberPlayers, 4.59, 1.98))
     if(callValue > 0):
-        np.append(inputLayer, normalizeUniformVariable(
-            math.log(callValue), 2.284, 4.549))
-        np.append(inputLayer, inputLayer, 1)
+        inputLayer = np.append(inputLayer, normalizeNormalVariable(
+            math.log(callValue), 0.81, 0.94))
+        inputLayer = np.append(inputLayer, 1)
     else:
         # Append -1 to to indicate callValue is 0.
-        np.append(inputLayer, 0)
-        np.append(inputLayer, -1)    
+        inputLayer = np.append(inputLayer, 0)
+        inputLayer = np.append(inputLayer, -1)    
     # Input is newBet a raise?
     if(newBet > callValue):
-        np.append(inputLayer, 1)
+        inputLayer = np.append(inputLayer, 1)
     else:
-        np.append(inputLayer, -1)    
+        inputLayer = np.append(inputLayer, -1)    
     # Input is newBet a check?
     if(newBet == 0):
-        inp.append(inputLayer, 1)
+        inputLayer = np.append(inputLayer, 1)
     else:
-        np.append(inputLayer, -1)
-    np.append(inputLayer, normalizeUniformVariable(
-        math.log(initialChipsAverage), 3.851 , 2.905))
-    np.append(inputLayer, normalizeUniformVariable(
-        math.log(pot), 0 , 1))
+        inputLayer = np.append(inputLayer, -1)
+    inputLayer = np.append(inputLayer, normalizeNormalVariable(
+        math.log(initialChipsAverage), 5.49, 0.72))
+    inputLayer = np.append(inputLayer, normalizeNormalVariable(
+        math.log(pot), 4.08, 1.80))
     if(betsMade > 0):
-        np.append(inputLayer, normalizeUniformVariable(
-            math.log(betsMade), 0, 1))
-        np.append(inputLayer, 1)
+        inputLayer = np.append(inputLayer, normalizeNormalVariable(
+            math.log(betsMade), 0.15, 0.99))
+        inputLayer = np.append(inputLayer, 1)
     else:
         # Append -1 to to indicate betsMade is 0.
-        np.append(inputLayer, 0)
-        np.append(inputLayer, -1)
+        inputLayer = np.append(inputLayer, 0)
+        inputLayer = np.append(inputLayer, -1)
+    return inputLayer
 
 def geneticNNDecision(
     decisionMakerReference, position, handStrength, roundNumber, bigBlind,
