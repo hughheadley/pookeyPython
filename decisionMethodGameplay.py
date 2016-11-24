@@ -242,6 +242,6 @@ def monteCarloGames(
     saveRefStats(resultsFile, refStats)
 
 # Test performance of decision makers 1-10
-players = range(1,11)
+players = range(1,12)
 print players
 monteCarloGames(players, sampleSize = 1000)

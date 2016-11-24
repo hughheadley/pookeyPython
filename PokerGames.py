@@ -457,7 +457,7 @@ def getDecisionType(decisionRefNumber):
 
 def getAIBet(
     decisionMakerReference, fileNames, position, bigBlind, roundNumber,
-    handStrength, folds, chips, bets, raises):
+    handStrength, chips, bets, raises, calls, folds):
     decisionMethod = getDecisionType(decisionMakerReference)
     newBet = 0
     if(decisionMethod == "simple"):
@@ -465,7 +465,11 @@ def getAIBet(
     elif(decisionMethod == "geneticNN"):
         newBet = AIDecisions.geneticNNDecision(
             decisionMakerReference, position, handStrength, roundNumber,
-            bigBlind, folds, chips, bets, raises)
+            bigBlind, chips, bets, raises, folds)
+    elif(decisionMethod == "firstNNMethod"):
+        newBet = AIDecisions.firstNNMethodDecision(
+            decisionMakerReference, position, handStrength, roundNumber,
+            bigBlind, chips, bets, raises, calls, folds)
     else:
         prompt = (
             "Error in PokerGames module in getAIBet function."
@@ -534,7 +538,7 @@ def getHumanBet(position, playerName, chipCount, bets):
 
 def getBet(
     decisionRef, fileNames, position, playerNames, AIPlayers, trainingMode,
-    bigBlind, roundNumber, handStrength, folds, chips, bets, calls, raises):
+    bigBlind, roundNumber, handStrength, chips, bets, raises, calls, folds):
     # Calculate values used in decising bet.
     initialNumberPlayers = len(bets)
     maxBet = np.amax(bets)
@@ -542,7 +546,7 @@ def getBet(
     if(AIPlayers[position]):
         newBet = getAIBet(
             decisionRef, fileNames, position, bigBlind, roundNumber,
-            handStrength, folds, chips, bets, raises)
+            handStrength, chips, bets, raises, calls, folds)
     else:
         newBet = getHumanBet(
             position, playerNames[position], chips[position], bets)
@@ -550,7 +554,8 @@ def getBet(
     betValidity = (((newBet >= callValue) and (newBet <= chips[position]))
         or (newBet == chips[position]) or (newBet == 0))
     if(not betValidity):
-        raw_input("Error invalid bet made")
+        raw_input("Error in PokerGames module in getBet function: "
+          + "invalid bet made")
     return newBet
 
 def betActionType(newBet, position, chips, bets):
@@ -784,7 +789,7 @@ def doBetting(
                     newBet = getBet(
                         decisionRef, fileNames, position, playerNames,
                         AIPlayers, trainingMode, bigBlind, roundNumber,
-                        handStrength, folds, chips, bets, calls, raises)
+                        handStrength, chips, bets, raises, calls, folds)
                     newBet = int(newBet)
                     # If recording this bet then make the bet random,
                     #overwrie old bet made and record game state.
