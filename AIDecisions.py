@@ -6,6 +6,7 @@ import numpy as np
 import math
 import os
 import time
+import csv
 from keras.models import model_from_json
 from keras.models import Sequential
 
@@ -228,9 +229,11 @@ def prepareFirstNNInputs(betConditions):
 
 def getNNPrediction(model, inputLayer):
     # Pass inputLayer through the model and return output.
-    prediction = model.predict(inputLayer)
+    inputLength = np.shape(inputLayer)[0]
+    newInputLayer = np.reshape(inputLayer,(1,inputLength))
+    prediction = model.predict(newInputLayer)
     return prediction
- 
+
 def getProfitMoments(categoryDistribution, categoryValues):
     # Calculate mean and variance from profit distribution.
     # Sum over profit categories to get mean and variance.
@@ -248,8 +251,12 @@ def getCategoryMeans(refNumber, filename):
     decisionSubFolder = ("decisionMakers/decisionMaker" + str(refNumber)
     + "/" + str(filename))
     fullFilePath = os.path.join(currentPath, decisionSubFolder)
-    with open(fullFilePath, 'rb') as csvfile:
-        categoryLimits = csv.reader(csvfile, delimiter=' ', quotechar='|')
+    #with open(fullFilePath, 'rb') as csvfile:
+    #categoryLimits = csv.reader(open(fullFilePath))
+    
+    csvData = csv.reader(open(fullFilePath))
+    limitsList = [float(line[0]) for line in csvData]
+    categoryLimits = np.asarray(limitsList)
 
     # Find the mean within each category.
     numberCategories = len(categoryLimits) - 1
@@ -262,17 +269,21 @@ def getBetStats(
     inputLayer, winDefeatModel, profitModel, lossModel, refNumber, foldLoss):
     # Calculate the mean and variance of the potential gain.
     # Predict chance of winning.
-    winChance = getNNPrediction(winDefeatModel, inputLayer)
+    winChance = getNNPrediction(winDefeatModel, inputLayer)[0][0]
     
-    profitDistribution = getNNPrediction(profitModel, inputLayer)
+    profitPrediction = getNNPrediction(profitModel, inputLayer)[0]
+    # Normalize the outputs to sum to 1.
+    profitDistribution = np.divide(profitPrediction,np.sum(profitPrediction))
     # Open player files to get values of profit categories.
-    profitCategoryValues = getCategoryValues(
+    profitCategoryValues = getCategoryMeans(
         refNumber, "profitCategoryValues.csv")
     profitMoments = getProfitMoments(profitDistribution, profitCategoryValues)
    
-    lossDistribution = getNNPrediction(lossModel, inputLayer)
+    lossPrediction = getNNPrediction(lossModel, inputLayer)[0]
+    # Normalize the outputs to sum to 1.
+    lossDistribution = np.divide(lossPrediction,np.sum(lossPrediction))
     # Open player files to get values of loss categories.
-    lossCategoryValues = getCategoryValues(
+    lossCategoryValues = getCategoryMeans(
         refNumber, "lossCategoryValues.csv")
     lossMoments = getProfitMoments(lossDistribution, lossCategoryValues)
  
@@ -293,8 +304,6 @@ def loadNNModels(decisionRefNumber):
     decisionMakerPath = os.path.join(currentPath, decisionMakerFolder)
     winDefeatJsonFile = "winDefeatPrediction.json"
     winDefeatJsonPath = os.path.join(decisionMakerPath, winDefeatJsonFile)
-    print("ln 296 reached")
-    print(winDefeatJsonPath)
     winDefeatWeightsFile = "winDefeatPrediction.h5"
     winDefeatWeightsPath = os.path.join(
         decisionMakerPath, winDefeatWeightsFile)
@@ -312,40 +321,31 @@ def loadNNModels(decisionRefNumber):
     lossWeightsFile = "lossPrediction.h5"
     lossWeightsPath = os.path.join(
         decisionMakerPath, lossWeightsFile)
-
-    print("ln 314 reached")
-    print(decisionMakerPath)
-    print("ln 317 reached")
-    print(winDefeatJsonFile)
-    print("ln 319 reached")
-    print(winDefeatJsonPath)
+    
     # Load Json and create winDefeat model.
     jsonFile = open(winDefeatJsonPath, 'r')
     loadedModelJson = jsonFile.read()
     jsonFile.close()
-    winDefeatModel = model_from_json(winDefeatJsonPath)    
+    winDefeatModel = model_from_json(loadedModelJson)    
     # Load weights into winDefeat model.
     winDefeatModel.load_weights(winDefeatWeightsPath)
 
     # Load Json and create profit model.
-    jsonFile = open(profitModelFullPath, 'r')
+    jsonFile = open(profitJsonPath, 'r')
     loadedModelJson = jsonFile.read()
     jsonFile.close()
-    profitModel = model_from_json(profitJsonPath)    
+    profitModel = model_from_json(loadedModelJson)    
     # Load weights into profit model.
-    profitModel.load_weights(profitWeightsFullPath)
+    profitModel.load_weights(profitWeightsPath)
 
-
-    print("ln 332 reached")
     # Load Json and create loss model.
-    jsonFile = open(lossModelFullPath, 'r')
+    jsonFile = open(lossJsonPath, 'r')
     loadedModelJson = jsonFile.read()
     jsonFile.close()
-    lossModel = model_from_json(lossJsonPath)    
-    # Load weights into loss model.
-    lossModel.load_weights(lossWeightsFullPath)
+    lossModel = model_from_json(loadedModelJson)    
+    # Load weights into profit model.
+    lossModel.load_weights(lossWeightsPath)
 
-    print("ln 341 reached")
     allModels = [winDefeatModel, profitModel, lossModel]
     return allModels
 
@@ -369,25 +369,27 @@ def optimizeBet(
     if(chipCount <= callValue):
         # Compare calling with folding.
     	callBet = (chipCount / bigBlind)
+	betConditions[0] = 0
+        inputLayer = prepareFirstNNInputs(betConditions)
     	callStats = getBetStats(
             inputLayer, winDefeatModel, profitModel, lossModel,
             decisionRefNumber, foldLoss)
     	callProfit = callStats[0]
-    	if(callProfit > foldProfit):
+    	if(callProfit > 0):
             optimumBet = chipCount
         else:
             optimumBet = 0
     else:
 	betConditions[0] = (chipCount / bigBlind)
 	# Compare possible bets between callvalue and chips.
-    	logCallValue = math.log(callValue / bigBlind)
-    	logChipCount = math.log(chipCount / bigBlind)
+    	logCallValue = math.log(1 + callValue / bigBlind)
+    	logChipCount = math.log(1 + chipCount / bigBlind)
     	logBetRange = (logChipCount - logCallValue)
     	logBetInterval = logBetRange / (searchResolution - 1)
     	optimumBetScore = 0 # Folding always has score of 0.
     	for i in range(0, searchResolution):
 	    logBet = logCallValue + (logBetInterval * i)
-	    bet = (2.7183 ** logBet)
+	    bet = (2.7183 ** logBet) - 1
 	    betConditions[0] = bet
 	    inputLayer = prepareFirstNNInputs(betConditions)
 	    betStats = getBetStats(
@@ -397,7 +399,7 @@ def optimizeBet(
 	    gainVariance = betStats[1]
 	    betScore = meanGain / ((gainVariance + 0.001) ** 0.5)
 	    if(betScore > optimumBetScore):
-                optimumBet = int((2.7183 ** logBet) * bigBlind)
+                optimumBet = int(((2.7183 ** logBet) - 1) * bigBlind)
                 optimumBetScore = betScore
         if(optimumBet > chipCount):
             optimumBet = chipCount
