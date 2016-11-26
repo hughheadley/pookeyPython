@@ -457,7 +457,8 @@ def getDecisionType(decisionRefNumber):
 
 def getAIBet(
     decisionMakerReference, fileNames, position, bigBlind, roundNumber,
-    handStrength, chips, bets, raises, calls, folds):
+    handStrength, chips, bets, raises, calls, folds, decisionModels):
+    # Get a new bet made by the decision maker.
     decisionMethod = getDecisionType(decisionMakerReference)
     newBet = 0
     if(decisionMethod == "simple"):
@@ -469,7 +470,7 @@ def getAIBet(
     elif(decisionMethod == "firstNNMethod"):
         newBet = AIDecisions.firstNNMethodDecision(
             decisionMakerReference, position, handStrength, roundNumber,
-            bigBlind, chips, bets, raises, calls, folds)
+            bigBlind, chips, bets, raises, calls, folds, decisionModels)
     else:
         prompt = (
             "Error in PokerGames module in getAIBet function."
@@ -538,7 +539,8 @@ def getHumanBet(position, playerName, chipCount, bets):
 
 def getBet(
     decisionRef, fileNames, position, playerNames, AIPlayers, trainingMode,
-    bigBlind, roundNumber, handStrength, chips, bets, raises, calls, folds):
+    bigBlind, roundNumber, handStrength, chips, bets, raises, calls, folds,
+    decisionModels):
     # Calculate values used in decising bet.
     initialNumberPlayers = len(bets)
     maxBet = np.amax(bets)
@@ -546,7 +548,7 @@ def getBet(
     if(AIPlayers[position]):
         newBet = getAIBet(
             decisionRef, fileNames, position, bigBlind, roundNumber,
-            handStrength, chips, bets, raises, calls, folds)
+            handStrength, chips, bets, raises, calls, folds, decisionModels)
     else:
         newBet = getHumanBet(
             position, playerNames[position], chips[position], bets)
@@ -751,9 +753,9 @@ def recordProfit(
 def doBetting(
     trainingMode, bigBlind, roundNumber, chips, bets, raises, calls, folds,
     startPosition, playerNames, cardStrengths, AIPlayers, playerCards,
-    communityCards, decisionRefs = [], fileNames = [], actionCount = False,
-    actionToRecord = False, betRecordFile = "trainingDump/betRecords.csv",
-    callChance = 0.3):
+    communityCards, playerModels, decisionRefs = [], fileNames = [],
+    actionCount = False, actionToRecord = False,
+    betRecordFile = "trainingDump/betRecords.csv", callChance = 0.3):
     # Conduct a round of betting, update chips and return the final
     #position played from.
     # If actionCount reaches actionToRecord then record the bet.
@@ -786,10 +788,12 @@ def doBetting(
                         decisionRef = 0
                     else:
                         decisionRef = decisionRefs[position]
+                    decisionModels = playerModels[1][position]
                     newBet = getBet(
                         decisionRef, fileNames, position, playerNames,
                         AIPlayers, trainingMode, bigBlind, roundNumber,
-                        handStrength, chips, bets, raises, calls, folds)
+                        handStrength, chips, bets, raises, calls, folds,
+                        decisionModels)
                     newBet = int(newBet)
                     # If recording this bet then make the bet random,
                     #overwrie old bet made and record game state.
@@ -974,8 +978,9 @@ def selectActionNumber(initialNumberPlayers):
 
 def playhand(
     playerNames, initialChips, bigBlind, dealerPosition,
-    manualDealing, trainingMode, AIPlayers, decisionRefs = [], fileNames = [],
-    recordBets = False, betRecordFile = "betRecords.csv"):
+    manualDealing, trainingMode, AIPlayers, playerModels,
+    decisionRefs = [], fileNames = [], recordBets = False,
+    betRecordFile = "betRecords.csv"):
     # playhand takes the players' details and starting chips and plays
     #one hand of poker.
     # If recordBets is True then choose a random time to make a player's
@@ -1031,9 +1036,10 @@ def playhand(
         bettingInfo = doBetting(
             trainingMode, bigBlind, roundNumber, chips, bets, raises, calls,
             folds, actionPosition, playerNames, cardStrengths, AIPlayers,
-            playerCards, communityCards, decisionRefs = decisionRefs,
-            fileNames = fileNames, actionCount = actionCount,
-            actionToRecord = recordActionNumber, betRecordFile = betRecordFile)
+            playerCards, communityCards, playerModels,
+            decisionRefs = decisionRefs, fileNames = fileNames,
+            actionCount = actionCount, actionToRecord = recordActionNumber,
+            betRecordFile = betRecordFile)
         actionPosition = bettingInfo[0]
         actionCount = bettingInfo[1]
         recordedPosition = bettingInfo[2]

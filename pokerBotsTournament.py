@@ -8,6 +8,7 @@ import os
 import PokerGames
 import math
 import csv
+from keras.models import model_from_json
 
 random.seed()
 
@@ -89,7 +90,7 @@ def randomChips(bigBlind, minChips, maxChips, initialNumberPlayers):
     return initialChips
 
 def playRandomHand(
-    decisionRefs, bigBlind = 100, minChips = 10, maxChips = 200):
+    decisionRefs, playerModels, bigBlind = 100, minChips = 10, maxChips = 200):
     # Players start with a random amount of chips to simulate a random
     #point in a tournament.
     initialNumberPlayers = len(decisionRefs)
@@ -109,8 +110,8 @@ def playRandomHand(
     fileNames = getFileNames(decisionRefs)
     # Play one hand.
     finalChips = PokerGames.playhand(
-    playerNames, initialChips, bigBlind, dealerPosition,
-    manualDealing, trainingMode, AIPlayers, decisionRefs, fileNames,
+    playerNames, initialChips, bigBlind, dealerPosition, manualDealing,
+    trainingMode, AIPlayers, playerModels, decisionRefs, fileNames,
     recordBets = True)
     # Convert the chips list into a numpy array.
     np.asarray(finalChips)
@@ -186,6 +187,80 @@ def saveRefStats(fileName, refStats):
         writer = csv.writer(resultsFile)
         writer.writerows(results)
 
+def loadKerasModel(jsonFilePath, hFiveFilePath):
+    # Load Json and create winDefeat model.
+    jsonFile = open(jsonFilePath, 'r')
+    loadedModelJson = jsonFile.read()
+    jsonFile.close()
+    kerasModel = model_from_json(loadedModelJson)    
+    # Load weights into winDefeat model.
+    kerasModel.load_weights(hFiveFilePath)
+    return kerasModel
+
+def loadFirstNNModels(decisionRefNumber):
+    # Load all NN models used by decision maker.
+    # Get file path of each model.
+    currentPath = os.getcwd()
+    decisionMakerFolder = ("decisionMakers/decisionMaker"
+                           + str(decisionRefNumber))
+    decisionMakerPath = os.path.join(currentPath, decisionMakerFolder)
+    winDefeatJsonFile = "winDefeatPrediction.json"
+    winDefeatJsonPath = os.path.join(decisionMakerPath, winDefeatJsonFile)
+    winDefeatWeightsFile = "winDefeatPrediction.h5"
+    winDefeatWeightsPath = os.path.join(
+        decisionMakerPath, winDefeatWeightsFile)
+
+    profitJsonFile = "profitPrediction.json"
+    profitJsonPath = os.path.join(decisionMakerPath, profitJsonFile)
+    profitWeightsFile = "profitPrediction.h5"
+    profitWeightsPath = os.path.join(decisionMakerPath, profitWeightsFile)
+
+    lossJsonFile = "lossPrediction.json"
+    lossJsonPath = os.path.join(decisionMakerPath, lossJsonFile)
+    lossWeightsFile = "lossPrediction.h5"
+    lossWeightsPath = os.path.join(decisionMakerPath, lossWeightsFile)
+
+    # Load Json and create winDefeat model.
+    winDefeatModel = loadKerasModel(winDefeatJsonPath, winDefeatWeightsPath)
+    profitModel = loadKerasModel(profitJsonPath, profitWeightsPath)
+    lossModel = loadKerasModel(lossJsonPath, lossWeightsPath)
+
+    decisionModels = [winDefeatModel, profitModel, lossModel]
+    return decisionModels
+
+def loadPlayerModels(refNumbers):
+    # Load each of the models used to decide bets.
+    # playerModels contains two columns, one with ref Numbers, the other with
+    #lists of decision models for that ref Number.
+    playerModels = [0,0]
+    playerModels[0] = refNumbers
+    playerModels[1] = [[0]] * len(refNumbers)
+    for index in range(0, len(refNumbers)):
+        decisionMethod = PokerGames.getDecisionType(refNumbers[index])
+        if(decisionMethod == "firstNNMethod"):
+            decisionModels = loadFirstNNModels(refNumbers[index])
+            playerModels[1][index] = decisionModels
+        else:
+            playerModels[1][index] = []
+    return playerModels
+
+def getPlayerModels(playerRefs, tournamentModels):
+    # Return models in tournamentModels which correspond to playerRefs.
+    playerModels = [0,0]
+    # playerRefs are those playing the hand, refNumbers are those in the
+    #tournament.
+    playerModels[0] = playerRefs
+    playerModels[1] = [[0]] * len(playerRefs)
+    refNumbers = np.asarray(tournamentModels[:][0])
+
+    
+    for i in range(0, len(playerRefs)):
+        # Find where in the list this player reference is.
+        refIndex = np.where(refNumbers == playerRefs[i])[0][0]
+        # Copy models for this player.
+        playerModels[1][i] = tournamentModels[1][refIndex]
+    return playerModels
+
 def monteCarloGames(
     refNumbers, playerDistribution = "uniform", keyPlayers = False,
     bigBlind = 100, minChips = 10, maxChips = 200, sampleSize = 1000,
@@ -207,6 +282,10 @@ def monteCarloGames(
     refNumArray = np.copy(refNumbers)
     refStats = np.zeros((len(refNumbers), 7))
     refStats[:,0] = refNumbers
+
+    # Load decision making models.
+    playerTournamentModels = loadPlayerModels(refNumbers)
+
     # Loop until all relevant players reach the sample size requirement.
     sampleSizeReached = False
     while(not sampleSizeReached):
@@ -228,13 +307,15 @@ def monteCarloGames(
         # Select random players.
         playerRefs = selectRandomPlayers(
             numberPlayers, refNumbers, essentialPlayers, playerDistribution)
+        # Get models for those playing this game.
+        playerModels = getPlayerModels(playerRefs, playerTournamentModels)
         # Play one hand.
         profits = playRandomHand(
-            playerRefs, bigBlind = bigBlind, minChips = minChips,
+            playerRefs, playerModels, bigBlind = bigBlind, minChips = minChips,
             maxChips = maxChips)
         # Scale profits by big blind.
         profitsArray = np.array(profits)
-        scaledProfits = np.divide(profits, bigBlind)
+        scaledProfits = np.divide(profitsArray, bigBlind)
         # Update refStats.
         updateRefStats(refStats, playerRefs, scaledProfits)
         # Test if sampleSize is reached.
@@ -243,7 +324,7 @@ def monteCarloGames(
     print refStats
     saveRefStats(resultsFile, refStats)
 
-# Test performance of decision makers 1-10
+# Test performance of decision makers 1-11.
 players = range(1,12)
 print players
 monteCarloGames(players, sampleSize = 1000)

@@ -295,68 +295,13 @@ def getBetStats(
     betStats = [expectedGain, gainVariance]
     return betStats
 
-def loadNNModels(decisionRefNumber):
-    # Load all NN models used by decision maker.
-    # Get file path of each model.
-    currentPath = os.getcwd()
-    decisionMakerFolder = ("decisionMakers/decisionMaker"
-                           + str(decisionRefNumber))
-    decisionMakerPath = os.path.join(currentPath, decisionMakerFolder)
-    winDefeatJsonFile = "winDefeatPrediction.json"
-    winDefeatJsonPath = os.path.join(decisionMakerPath, winDefeatJsonFile)
-    winDefeatWeightsFile = "winDefeatPrediction.h5"
-    winDefeatWeightsPath = os.path.join(
-        decisionMakerPath, winDefeatWeightsFile)
-
-    profitJsonFile = "profitPrediction.json"
-    profitJsonPath = os.path.join(
-        decisionMakerPath, profitJsonFile)
-    profitWeightsFile = "profitPrediction.h5"
-    profitWeightsPath = os.path.join(
-        decisionMakerPath, profitWeightsFile)
-
-    lossJsonFile = "lossPrediction.json"
-    lossJsonPath = os.path.join(
-        decisionMakerPath, lossJsonFile)
-    lossWeightsFile = "lossPrediction.h5"
-    lossWeightsPath = os.path.join(
-        decisionMakerPath, lossWeightsFile)
-    
-    # Load Json and create winDefeat model.
-    jsonFile = open(winDefeatJsonPath, 'r')
-    loadedModelJson = jsonFile.read()
-    jsonFile.close()
-    winDefeatModel = model_from_json(loadedModelJson)    
-    # Load weights into winDefeat model.
-    winDefeatModel.load_weights(winDefeatWeightsPath)
-
-    # Load Json and create profit model.
-    jsonFile = open(profitJsonPath, 'r')
-    loadedModelJson = jsonFile.read()
-    jsonFile.close()
-    profitModel = model_from_json(loadedModelJson)    
-    # Load weights into profit model.
-    profitModel.load_weights(profitWeightsPath)
-
-    # Load Json and create loss model.
-    jsonFile = open(lossJsonPath, 'r')
-    loadedModelJson = jsonFile.read()
-    jsonFile.close()
-    lossModel = model_from_json(loadedModelJson)    
-    # Load weights into profit model.
-    lossModel.load_weights(lossWeightsPath)
-
-    allModels = [winDefeatModel, profitModel, lossModel]
-    return allModels
-
 def optimizeBet(
     decisionRefNumber, betConditions, callValue, chipCount, existingBet,
-    bigBlind, searchResolution = 10):
-    # Load all NN models.
-    allModels = loadNNModels(decisionRefNumber)
-    winDefeatModel = allModels[0]
-    profitModel = allModels[1]
-    lossModel = allModels[2]
+    bigBlind, decisionModels, searchResolution = 10):
+    # Assign all NN models.
+    winDefeatModel = decisionModels[0]
+    profitModel = decisionModels[1]
+    lossModel = decisionModels[2]
     
     # Find the optimum bet to make given the bet conditions.
     if(searchResolution < 2):
@@ -407,7 +352,7 @@ def optimizeBet(
 
 def firstNNMethodDecision(
     decisionRefNumber, position, handStrength, roundNumber, bigBlind,
-    chips, bets, raises, calls, folds, searchResolution = 10):
+    chips, bets, raises, calls, folds, decisionModels, searchResolution = 10):
     # Use predictions for win/defeat and profit/loss to select a bet.
     # Put game state with normalized bets into list.
     bigBlind = float(bigBlind)
@@ -429,7 +374,9 @@ def firstNNMethodDecision(
     existingBet = bets[position]
     chipCount = chips[position]
     callValue = maxBet - existingBet
-    newBet = optimizeBet(decisionRefNumber, betConditions, callValue, chipCount, existingBet, bigBlind)
+    newBet = optimizeBet(
+        decisionRefNumber, betConditions, callValue, chipCount, existingBet,
+        bigBlind, decisionModels)
     return newBet
 
 def geneticNNDecision(
