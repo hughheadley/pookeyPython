@@ -53,7 +53,7 @@ def getFileNames(decisionRefs):
     #deicision maker.
     # maxNumberFiles is the most number of files which an individual
     #decision maker has.
-    maxNumberFiles = 1
+    maxNumberFiles = 3
     numberPlayers = len(decisionRefs)
     decisionFiles = np.array([''], dtype=object)
     decisionFiles.resize((numberPlayers, maxNumberFiles))    
@@ -261,6 +261,31 @@ def getPlayerModels(playerRefs, tournamentModels):
         playerModels[1][i] = tournamentModels[1][refIndex]
     return playerModels
 
+def choosePlayers(
+    refStats, maxPlayers, keyPlayers = False, playerDistribution = "uniform"):
+    refNumbers = refStats[:,0]
+    essentialPlayers = []
+    # Player who has the fewest games played must be in game.
+    minSamplesInfo = findMinSampleRef(refStats)
+    minSamplesRef = minSamplesInfo[0]
+    essentialPlayers.append(int(minSamplesRef))
+    minSamples = minSamplesInfo[1]
+    # One keyPlayer must be in the game.
+    if((keyPlayers is not False) and (keyPlayers != [])):
+        # Pick a random key player.
+        keyIndex = np.random.randint(0, len(keyPlayers))
+        if(keyPlayers[keyIndex] != minSamplesRef):
+            # If random key player is not the one chosen for having
+            #minimum samples then append this player.
+            essentialPlayers.append(int(keyPlayers[keyIndex]))
+    # Pick a random number of players to play a game.
+    playerLimit = min(maxPlayers, len(refNumbers))
+    numberPlayers = np.random.randint(2, playerLimit + 1)
+    # Select random players.
+    playerRefs = selectRandomPlayers(
+        numberPlayers, refNumbers, essentialPlayers, playerDistribution)
+    return playerRefs
+
 def monteCarloGames(
     refNumbers, playerDistribution = "uniform", keyPlayers = False,
     bigBlind = 100, minChips = 10, maxChips = 200, sampleSize = 1000,
@@ -289,24 +314,10 @@ def monteCarloGames(
     # Loop until all relevant players reach the sample size requirement.
     sampleSizeReached = False
     while(not sampleSizeReached):
-        essentialPlayers = []
-        # Player who has the fewest games played must be in game.
-        minSamplesInfo = findMinSampleRef(refStats)
-        minSamplesRef = minSamplesInfo[0]
-        essentialPlayers.append(int(minSamplesRef))
-        minSamples = minSamplesInfo[1]
-        # One keyPlayer must be in the game.
-        if((keyPlayers is not False) and (keyPlayers != [])):
-            # Pick a random key player.
-            keyIndex = np.random.randint(0, len(keyPlayers))
-            if(keyPlayers[keyIndex] != minSamplesRef):
-                essentialPlayers.append(int(keyPlayers[keyIndex]))
-        # Pick a random number of players to play a game.
-        playerLimit = min(maxPlayers, len(refNumbers))
-        numberPlayers = np.random.randint(2, playerLimit + 1)
-        # Select random players.
-        playerRefs = selectRandomPlayers(
-            numberPlayers, refNumbers, essentialPlayers, playerDistribution)
+        # Choose players to play in this game.
+        playerRefs = choosePlayers(refStats, maxPlayers,
+                                   keyPlayers = keyPlayers,
+                                   playerDistribution = playerDistribution)
         # Get models for those playing this game.
         playerModels = getPlayerModels(playerRefs, playerTournamentModels)
         # Play one hand.
@@ -324,7 +335,7 @@ def monteCarloGames(
     print refStats
     saveRefStats(resultsFile, refStats)
 
-# Test performance of decision makers 1-11.
-players = range(1,12)
+# Test performance of decision makers 1-10.
+players = [int(i) for i in range(1,11)]
 print players
-monteCarloGames(players, sampleSize = 1000)
+monteCarloGames(players, sampleSize = 5000)

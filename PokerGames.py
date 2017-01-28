@@ -447,8 +447,9 @@ def getDecisionType(decisionRefNumber):
     # Open decisionType.txt file in the relevant folder to find the
     #decision method used by this AI player.
     currentPath = os.getcwd()
-    subFolderFile = ("decisionMakers/decisionMaker" + str(decisionRefNumber)
-    + "/decisionType.txt")
+    subFolderFile = ("decisionMakers/decisionMaker"
+                     + str(int(decisionRefNumber))
+                     + "/decisionType.txt")
     filePath = os.path.join(currentPath, subFolderFile)    
     with open(filePath,"r") as decisionfile:
         for line in decisionfile:
@@ -463,6 +464,8 @@ def getAIBet(
     newBet = 0
     if(decisionMethod == "simple"):
         newBet = AIDecisions.simpleAIBet(bigBlind, handStrength, bets, position)
+    elif(decisionMakerReference == 10):
+        newBet = 0
     elif(decisionMethod == "geneticNN"):
         newBet = AIDecisions.geneticNNDecision(
             decisionMakerReference, position, handStrength, roundNumber,
@@ -477,7 +480,7 @@ def getAIBet(
             + "Did not find valid decisionType for decision reference "
             + str(decisionMakerReference))
         temp = raw_input(prompt)
-    netBet = int(newBet)
+    newBet = int(newBet)
     # Go all-in if newBet is greater than chip count.
     # Bet 0 if newBet is less that zero.
     if(newBet > chips[position]):
@@ -750,6 +753,64 @@ def recordProfit(
     writer = csv.writer(open(betRecordFile, 'wb'))
     writer.writerows(lines)
 
+def getOneBet(
+    trainingMode,  bigBlind, roundNumber, position, playerNames, AIPlayers,
+    chips, bets, raises, calls, folds, cardStrengths, playerCards,
+    communityCards, playerModels, decisionRefs, fileNames,
+    actionToRecord = False, actionCount = False, callChance = 0.3,
+    betRecordFile = "trainingDump/betRecords.csv",
+    recordedPosition = False):
+    newBet = 0
+    if(not folds[position]):
+        # Check if player can bet.
+        if(chips[position] == 0):
+            if(not trainingMode):
+                print playerNames[position] + " cannot bet"
+        else:
+            handStrength = cardStrengths[position]
+            if(len(decisionRefs) <= position):
+                decisionRef = 0
+            else:
+                decisionRef = decisionRefs[position]
+            decisionModels = playerModels[1][position]
+            newBet = getBet(
+                decisionRef, fileNames, position, playerNames,
+                AIPlayers, trainingMode, bigBlind, roundNumber,
+                handStrength, chips, bets, raises, calls, folds,
+                decisionModels)
+            newBet = int(newBet)
+            # If this player has been recorded before then
+            #prevent them from folding.
+            if recordedPosition is not False:
+               if(recordedPosition == position):
+                    # If folding set newBet to the call value.
+                    if(newBet == 0):
+                        maxBet = np.amax(bets)
+                        callValue = maxBet - bets[position]
+                        chipCount = chips[position]
+                        newBet = min(chipCount, callValue)
+            # If recording this bet then make the bet random,
+            #overwrie old bet made and record game state.
+            if(actionToRecord is not False):
+                actionCount += 1
+                if(actionCount == actionToRecord):
+                    newBet = randomBet(bigBlind, position, chips, bets,
+                                       callChance = callChance)
+                    newBet = int(newBet)
+                    recordedPosition = position
+                    holeCards = [0] * 2
+                    holeCards[0] = playerCards[position][0]
+                    holeCards[1] = playerCards[position][1]
+                    recordGameState(position, newBet, bigBlind, roundNumber,
+                                    chips, bets, raises, calls, folds,
+                                    cardStrengths[position], holeCards,
+                                    communityCards,
+                                    betRecordFile = betRecordFile)
+    oneBetInfo = []
+    oneBetInfo.append(newBet)
+    oneBetInfo.append(actionCount)
+    return oneBetInfo
+
 def doBetting(
     trainingMode, bigBlind, roundNumber, chips, bets, raises, calls, folds,
     startPosition, playerNames, cardStrengths, AIPlayers, playerCards,
@@ -763,12 +824,11 @@ def doBetting(
     initialNumberPlayers = len(bets)
     playersActive = initialNumberPlayers - sum(folds)
     # Reset round activity.
-    roundActive = True    
+    roundActive = True
     # active = True indicates that a player has acted this round.
     active = [False] * initialNumberPlayers
     position = startPosition
     while(roundActive):
-        newBet = 0;
         maxBet = np.amax(bets)
         # Check if the round is over.
         # Betting ends if there is 1 player left or if someone who
@@ -777,42 +837,18 @@ def doBetting(
             (active[position] and (bets[position] == maxBet))):
             roundActive = False
         else:
-            if(not folds[position]):
-                # Check if player can bet.
-                if(chips[position] == 0):
-                    if(not trainingMode):
-                        print playerNames[position] + " cannot bet"
-                else:
-                    handStrength = cardStrengths[position]
-                    if(len(decisionRefs) <= position):
-                        decisionRef = 0
-                    else:
-                        decisionRef = decisionRefs[position]
-                    decisionModels = playerModels[1][position]
-                    newBet = getBet(
-                        decisionRef, fileNames, position, playerNames,
-                        AIPlayers, trainingMode, bigBlind, roundNumber,
-                        handStrength, chips, bets, raises, calls, folds,
-                        decisionModels)
-                    newBet = int(newBet)
-                    # If recording this bet then make the bet random,
-                    #overwrie old bet made and record game state.
-                    if(actionToRecord is not False):
-                        actionCount += 1
-                        if(actionCount == actionToRecord):
-                            newBet = randomBet(
-                                bigBlind, position, chips, bets,
-                                callChance = callChance)
-                            newBet = int(newBet)
-                            recordedPosition = position
-                            holeCards = [0] * 2
-                            holeCards[0] = playerCards[position][0]
-                            holeCards[1] = playerCards[position][1]
-                            recordGameState(
-                                position, newBet, bigBlind, roundNumber, chips,
-                                bets, raises, calls, folds,
-                                cardStrengths[position], holeCards,
-                                communityCards, betRecordFile = betRecordFile)
+            oneBetInfo = getOneBet(trainingMode,  bigBlind, roundNumber,
+                                   position, playerNames, AIPlayers, chips,
+                                   bets, raises, calls, folds, cardStrengths,
+                                   playerCards, communityCards, playerModels,
+                                   decisionRefs, fileNames,
+                                   actionToRecord = actionToRecord,
+                                   actionCount = actionCount,
+                                   callChance = callChance,
+                                   betRecordFile = betRecordFile,
+                                   recordedPosition = recordedPosition)
+            newBet = oneBetInfo[0]
+            actionCount = oneBetInfo[1]
             # Update all money lists after new bet is made.
             updatedValues = postBetUpdate(
                 position, newBet, playerNames, chips, bets, calls, raises,
@@ -980,7 +1016,7 @@ def playhand(
     playerNames, initialChips, bigBlind, dealerPosition,
     manualDealing, trainingMode, AIPlayers, playerModels,
     decisionRefs = [], fileNames = [], recordBets = False,
-    betRecordFile = "betRecords.csv"):
+    betRecordFile = "trainingDump/betRecords.csv"):
     # playhand takes the players' details and starting chips and plays
     #one hand of poker.
     # If recordBets is True then choose a random time to make a player's
