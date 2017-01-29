@@ -8,6 +8,7 @@ import os
 import PokerGames
 import math
 import csv
+from scipy.stats import norm
 from keras.models import model_from_json
 
 random.seed()
@@ -56,7 +57,7 @@ def getFileNames(decisionRefs):
     maxNumberFiles = 3
     numberPlayers = len(decisionRefs)
     decisionFiles = np.array([''], dtype=object)
-    decisionFiles.resize((numberPlayers, maxNumberFiles))    
+    decisionFiles.resize((numberPlayers, maxNumberFiles))
     # Find current working directory.
     currentPath = os.getcwd()
     for i in range(0, numberPlayers):
@@ -118,6 +119,7 @@ def playRandomHand(
     profits = np.subtract(finalChips, initialChips)
     return profits
 
+"""
 def updateRefStats(refStats, playerRefs, scaledProfits):
     refNumbers = refStats[:,0]
     for i in range(0, len(playerRefs)):
@@ -140,7 +142,124 @@ def updateRefStats(refStats, playerRefs, scaledProfits):
         if((refStats[refIndex][1] > 0) and (refStats[refIndex][5] > 0)):
             refStats[refIndex][6] = (refStats[refIndex][4] /
                 ((refStats[refIndex][5] / refStats[refIndex][1]) ** 0.5))
+"""
 
+def getMean(dataList):
+    # Return the mean of a list of numerical data.
+    sumData = sum(dataList)
+    count = len(dataList)
+    if(count == 0):
+        return False
+    else:
+        mean = sumData/count
+    return mean
+
+def getVariance(dataList, mean):
+    # Return the variance of a list of numerical data.
+    sumData = sum(dataList)
+    count = len(dataList)
+    # Get sum of squares of entries.
+    sumSq = 0
+    if mean is not False:
+        for i in range(count):
+            sumSq += (dataList[i] ** 2)
+        if(count <= 1):
+            return False
+        else:
+            variance = ((sumSq/count)-(mean**2)) * (count / (count-1))
+    else:
+        return False
+    return variance
+
+def getAbsoluteThirdCentralMoment(dataList, mean):
+    # Return the third absolute moment about the mean of the data.
+    count = len(dataList)
+    sumMoment = 0
+    if mean is not False:
+        for i in range(count):
+            value = dataList[i]
+            sumMoment += (abs(value - mean) ** 3)
+        if(count <= 2):
+            return False
+        else:
+            thirdMoment = (sumMoment / count)
+    else:
+        return False
+    return thirdMoment
+
+def getConfidenceInterval(sampleMean, variance, samples, alpha = 0.05):
+    # Find a two tailed confidence interval of the mean using the
+    #central limit theorem.
+    # Find Z score for alpha
+    ZScore = norm.ppf(1-(alpha/2))
+    if variance is not False:
+        lowerLimit = sampleMean - ZScore * ((variance/samples)**0.5)
+        upperLimit = sampleMean + ZScore * ((variance/samples)**0.5)
+        interval = [lowerLimit, upperLimit]
+    else:
+        return False
+    return interval
+
+def conservativeConfidenceInterval(
+    sampleMean, variance, thirdMoment, samples, alpha = 0.05):
+    # Use the Berry-Esseen theorem to find a conservative confidence
+    #interval for the mean.
+    if variance is False:
+        return False
+    else:
+        stDev = variance**0.5
+        berryEsseenBoundNumerator = 0.33554 * (thirdMoment + 0.415*(stDev**3.0))
+        berryEsseenBoundDenominator = (stDev**3.0)*(samples ** 0.5)
+        berryEsseenBound = berryEsseenBoundNumerator/berryEsseenBoundDenominator
+        # Find the quantile of the conservative interval.
+        # If Berry-Esseen bound is too large then interval is infinite.
+        quantile = 1 - (alpha/2) + berryEsseenBound
+        if(quantile >= 1):
+            interval = False
+        else:
+            ZScore = norm.ppf(quantile)
+            lowerLimit = sampleMean - (ZScore * ((variance/samples)**0.5))
+            upperLimit = sampleMean + (ZScore * ((variance/samples)**0.5))
+            interval = [lowerLimit, upperLimit]
+    return interval
+
+def updateRefStats(refStats, playerRefs, profitRecords, confidenceAlpha=0.05):
+    # For each player's profit record recalculate summary statistics.
+    refNumbers = refStats[:,0]
+    tournamentSize = len(refNumbers)
+    numberPlayers = len(playerRefs)
+    # For all players who played most recent game increase samples by 1.
+    for player in range(numberPlayers):
+        refIndex = np.where(refNumbers == playerRefs[player])[0][0]
+        refStats[refIndex][1] += 1
+    # Calculate summary statistics for every tournament player.
+    for player in range(tournamentSize):
+        profitHistory = profitRecords[player]
+        mean = getMean(profitHistory)
+        refStats[player][2] = mean
+        variance = getVariance(profitHistory, mean)
+        refStats[player][3] = variance
+        thirdMoment = getAbsoluteThirdCentralMoment(profitHistory, mean)
+        refStats[player][4] = thirdMoment
+        samples = len(profitHistory)
+        confInt = getConfidenceInterval(mean, variance, samples,
+                                        alpha=confidenceAlpha)
+        if confInt is not False:
+            refStats[player][5] = confInt[0]
+            refStats[player][6] = confInt[1]
+        else:
+            refStats[player][5] = False
+            refStats[player][6] = False
+        conservativeInt = conservativeConfidenceInterval(mean, variance,
+                                                         thirdMoment, samples,
+                                                         alpha=confidenceAlpha)
+        if conservativeInt is not False:
+            refStats[player][7] = conservativeInt[0]
+            refStats[player][8] = conservativeInt[1]
+        else:
+            refStats[player][7] = False
+            refStats[player][8] = False
+        
 def findMinSampleRef(refStats):
     # Find the ref number corresponding to the fewest samples.
     sampleSizes = refStats[:,1]
@@ -180,8 +299,10 @@ def finishedSampling(refStats, keyPlayers, requiredSampleSize):
 def saveRefStats(fileName, refStats):
     # Title columns of results and save to a file
     columnTitles = np.array(
-        ["Decision Ref", "Sample size", "Profit sum", "Sum profit squared",
-        "Mean profit", "Variance profit", "Z score"])
+        ["Decision Ref", "Sample size", "Mean profit",
+         "Variance profit", "Third absolute moment", "Confidence lower",
+         "Confidence upper", "Conservative confidence lower",
+         "Conservative confidence upper"])
     results = np.vstack([columnTitles, refStats])
     with open(fileName, "wb") as resultsFile:
         writer = csv.writer(resultsFile)
@@ -253,7 +374,6 @@ def getPlayerModels(playerRefs, tournamentModels):
     playerModels[1] = [[0]] * len(playerRefs)
     refNumbers = np.asarray(tournamentModels[:][0])
 
-    
     for i in range(0, len(playerRefs)):
         # Find where in the list this player reference is.
         refIndex = np.where(refNumbers == playerRefs[i])[0][0]
@@ -286,6 +406,15 @@ def choosePlayers(
         numberPlayers, refNumbers, essentialPlayers, playerDistribution)
     return playerRefs
 
+def recordNewProfits(profitRecords, playerRefs, refNumbers, scaledProfits):
+    # Record scaledprofits in the profitRecords list.
+    # playerRefs are those who correspond to the new profits.
+    # refNumbers are all the players in the tournament.
+    for i in range(len(playerRefs)):
+        # Find index of player's profit.
+        playerIndex = refNumbers.index(playerRefs[i])
+        profitRecords[playerIndex].append(scaledProfits[i])
+
 def monteCarloGames(
     refNumbers, playerDistribution = "uniform", keyPlayers = False,
     bigBlind = 100, minChips = 10, maxChips = 200, sampleSize = 1000,
@@ -294,6 +423,7 @@ def monteCarloGames(
     # Play hands with random chip counts to test player performance in
     #random scenarios.
     # refNumbers is a list of all refNumbers which can play.
+    tournamentSize = len(refNumbers)
     # keyPlayers is list of specific refs being tested. At least one
     #must play in each game.
     if((keyPlayers is not False) and (keyPlayers != [])):
@@ -305,7 +435,7 @@ def monteCarloGames(
     # refStats contains refNumbers, samples, sumProfit, sumSqProfit,
     #meanProfit, varProfit, ZScore.
     refNumArray = np.copy(refNumbers)
-    refStats = np.zeros((len(refNumbers), 7))
+    refStats = np.zeros((len(refNumbers), 9))
     refStats[:,0] = refNumbers
 
     # Load decision making models.
@@ -313,6 +443,12 @@ def monteCarloGames(
 
     # Loop until all relevant players reach the sample size requirement.
     sampleSizeReached = False
+
+    # Create a list of lists to contain profits from games.
+    profitRecords = []
+    for i in range(tournamentSize):
+        profitRecords.append([])
+
     while(not sampleSizeReached):
         # Choose players to play in this game.
         playerRefs = choosePlayers(refStats, maxPlayers,
@@ -327,8 +463,10 @@ def monteCarloGames(
         # Scale profits by big blind.
         profitsArray = np.array(profits)
         scaledProfits = np.divide(profitsArray, bigBlind)
+        # Add latest game profits to records.
+        recordNewProfits(profitRecords, playerRefs, refNumbers, scaledProfits)
         # Update refStats.
-        updateRefStats(refStats, playerRefs, scaledProfits)
+        updateRefStats(refStats, playerRefs, profitRecords)
         # Test if sampleSize is reached.
         sampleSizeReached = finishedSampling(refStats, keyPlayers, sampleSize)
     # Display the stats for each player.
