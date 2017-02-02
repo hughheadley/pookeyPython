@@ -44,7 +44,7 @@ def openWeigthsTSVFile(filePath, layerSizes):
 
 def getGeneticWeights(decisionRefNumber, layerSizes):
     currentPath = os.getcwd()
-    subFolder = ("decisionMakers/decisionMaker" + str(decisionRefNumber)
+    subFolder = ("decisionMakers/decisionMaker" + str(int(decisionRefNumber))
     + "/geneticNNWeights.txt")
     fullpath = os.path.join(currentPath, subFolder)
     weights = openWeigthsTSVFile(fullpath, layerSizes)
@@ -297,7 +297,7 @@ def getBetStats(
 
 def optimizeBet(
     decisionRefNumber, betConditions, callValue, chipCount, existingBet,
-    bigBlind, decisionModels, searchResolution = 10):
+    bigBlind, decisionModels, searchResolution = 20):
     # Assign all NN models.
     winDefeatModel = decisionModels[0]
     profitModel = decisionModels[1]
@@ -377,6 +377,8 @@ def firstNNMethodDecision(
     newBet = optimizeBet(
         decisionRefNumber, betConditions, callValue, chipCount, existingBet,
         bigBlind, decisionModels)
+    print("New bet by NN decision maker is")
+    print(newBet)
     return newBet
 
 def geneticNNDecision(

@@ -744,6 +744,7 @@ def recordGameState(
 def recordProfit(
     profit, bigBlind, betRecordFile = "trainingDump/betRecords.csv"):
     # Record profit in the final line of the csv file.
+    print("profit rec")
     # Open csv as a 2D list.
     csvData = csv.reader(open(betRecordFile))
     lines = [l for l in csvData]
@@ -809,14 +810,15 @@ def getOneBet(
     oneBetInfo = []
     oneBetInfo.append(newBet)
     oneBetInfo.append(actionCount)
+    oneBetInfo.append(recordedPosition)
     return oneBetInfo
 
 def doBetting(
     trainingMode, bigBlind, roundNumber, chips, bets, raises, calls, folds,
     startPosition, playerNames, cardStrengths, AIPlayers, playerCards,
-    communityCards, playerModels, decisionRefs = [], fileNames = [],
-    actionCount = False, actionToRecord = False,
-    betRecordFile = "trainingDump/betRecords.csv", callChance = 0.3):
+    communityCards, playerModels, decisionRefs=[], fileNames=[],
+    actionCount=False, actionToRecord=False,
+    betRecordFile = "trainingDump/betRecords.csv", callChance=0.3):
     # Conduct a round of betting, update chips and return the final
     #position played from.
     # If actionCount reaches actionToRecord then record the bet.
@@ -849,6 +851,7 @@ def doBetting(
                                    recordedPosition = recordedPosition)
             newBet = oneBetInfo[0]
             actionCount = oneBetInfo[1]
+            recordedPosition = oneBetInfo[2]
             # Update all money lists after new bet is made.
             updatedValues = postBetUpdate(
                 position, newBet, playerNames, chips, bets, calls, raises,
@@ -1012,12 +1015,12 @@ def selectActionNumber(initialNumberPlayers):
         actionNumber = int(random.gauss(meanActions, stDevActions) + 0.5)
     return actionNumber
 
-def playhand(
-    playerNames, initialChips, bigBlind, dealerPosition,
-    manualDealing, trainingMode, AIPlayers, playerModels,
-    decisionRefs = [], fileNames = [], recordBets = False,
-    betRecordFile = "trainingDump/betRecords.csv"):
-    # playhand takes the players' details and starting chips and plays
+def playHand(
+    playerNames, initialChips, bigBlind, playerModels, dealerPosition=0,
+    manualDealing=False, trainingMode=True, AIPlayers=False,
+    decisionRefs=[], fileNames=[], recordBets=False,
+    betRecordFile="trainingDump/betRecords.csv"):
+    # playHand takes the players' details and starting chips and plays
     #one hand of poker.
     # If recordBets is True then choose a random time to make a player's
     #bet random and record their resulting profit.
@@ -1028,6 +1031,11 @@ def playhand(
     calls = np.zeros(initialNumberPlayers)
     raises = np.zeros(initialNumberPlayers)
     chips = np.zeros(initialNumberPlayers)
+    # If players are not specified as AI or not then assume all are AI.
+    if AIPlayers == False:
+        AIPlayers = []
+        for i in range(initialNumberPlayers):
+            AIPlayers.append(True)
     for i in range(0,initialNumberPlayers):
         chips[i] = initialChips[i]
     folds = [False] * initialNumberPlayers

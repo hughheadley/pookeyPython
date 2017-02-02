@@ -219,12 +219,14 @@ def discretizeLosses(
 def prepareNNTrainingData(
     inputsCount, profitDiscretizationCategories, lossDiscretizationCategories,
     decisionRefNumber, zeroProfit="profit",
-    allDataFile = "trainingDump/betRecords.csv",
+    allDataFile="trainingDump/betRecords.csv",
     winDefeatFile="trainingDump/winDefeatData.csv",
     profitFile="trainingDump/profitData.csv",
     lossFile="trainingDump/lossData.csv",
     discreteProfitFile="trainingDump/discreteProfitData.csv",
     discreteLossFile="trainingDump/discreteLossData.csv"):
+    # From records of betting decisions and results produce data for the
+    #win/defeat outcome, and for the profits and losses discretized.
     saveWinDefeat(
         inputsCount, allDataFile=allDataFile, winDefeatFile=winDefeatFile,
         zeroProfit=zeroProfit)        
