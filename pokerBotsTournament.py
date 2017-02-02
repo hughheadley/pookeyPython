@@ -7,6 +7,7 @@ import random
 import os
 import PokerGames
 import math
+import copy
 import csv
 from scipy.stats import norm
 from keras.models import model_from_json
@@ -23,7 +24,7 @@ def selectRandomPlayers(
     existingPlayers = []
     if((essentialPlayerRefs is not False) and (essentialPlayerRefs != [])):
         # Include players in essentialPlayerRefs.
-        for i in range(0, len(essentialPlayerRefs)):
+        for i in range(len(essentialPlayerRefs)):
             playerRefs.append(essentialPlayerRefs[i])
             existingPlayers.append(essentialPlayerRefs[i])
     # Sample new players from the range of ref numbers.
@@ -60,7 +61,7 @@ def getFileNames(decisionRefs):
     decisionFiles.resize((numberPlayers, maxNumberFiles))
     # Find current working directory.
     currentPath = os.getcwd()
-    for i in range(0, numberPlayers):
+    for i in range(numberPlayers):
         decisionRefNumber = decisionRefs[i]
         # Find filepath to decisionFiles.txt.
         subFolder = ("decisionMakers/decisionMaker"
@@ -75,13 +76,13 @@ def getFileNames(decisionRefs):
         # Add new files to player's list.
         if(len(content) > maxNumberFiles):
             decisionFiles.resize((numberPlayers, maxNumberFiles))
-        for j in range(0, len(content)):
+        for j in range(len(content)):
             decisionFiles[i][j] = content[j]
     return decisionFiles
 
 def randomChips(bigBlind, minChips, maxChips, initialNumberPlayers):
     initialChips = [0] * initialNumberPlayers
-    for i in range(0, initialNumberPlayers):
+    for i in range(initialNumberPlayers):
         randNumber = np.random.random()
         logMin = math.log(minChips)
         logMax = math.log(maxChips)
@@ -91,7 +92,7 @@ def randomChips(bigBlind, minChips, maxChips, initialNumberPlayers):
     return initialChips
 
 def playRandomHand(
-    decisionRefs, playerModels, bigBlind = 100, minChips = 10, maxChips = 200):
+    decisionRefs, playerModels, bigBlind=100, minChips=10, maxChips=200):
     # Players start with a random amount of chips to simulate a random
     #point in a tournament.
     initialNumberPlayers = len(decisionRefs)
@@ -101,7 +102,7 @@ def playRandomHand(
     initialChips = np.copy(startChips)
     # Set players' names as their ref numbers.
     playerNames = []
-    for i in range(0, initialNumberPlayers):
+    for i in range(initialNumberPlayers):
         playerNames.append(str(decisionRefs[i]))
     # Prepare values for playHand function.
     AIPlayers = [True] * initialNumberPlayers
@@ -113,36 +114,11 @@ def playRandomHand(
     finalChips = PokerGames.playhand(
     playerNames, initialChips, bigBlind, dealerPosition, manualDealing,
     trainingMode, AIPlayers, playerModels, decisionRefs, fileNames,
-    recordBets = True)
+    recordBets=True)
     # Convert the chips list into a numpy array.
     np.asarray(finalChips)
     profits = np.subtract(finalChips, initialChips)
     return profits
-
-"""
-def updateRefStats(refStats, playerRefs, scaledProfits):
-    refNumbers = refStats[:,0]
-    for i in range(0, len(playerRefs)):
-        # Find where in the list this decision maker is.
-        refIndex = np.where(refNumbers == playerRefs[i])[0][0]
-        # Update the stats for that index.
-        # Increase sample size.
-        refStats[refIndex][1] += 1
-        # Add profit.
-        refStats[refIndex][2] += scaledProfits[i]
-        # Add profit squared.
-        refStats[refIndex][3] += (scaledProfits[i] ** 2)
-        # Compute new mean profit.
-        refStats[refIndex][4] = refStats[refIndex][2] / refStats[refIndex][1]
-        # Compute new variance of profit.
-        refStats[refIndex][5] = ((refStats[refIndex][3] / refStats[refIndex][1])
-            - (refStats[refIndex][4] ** 2))
-        # Compute new Z score. If variance or sample size is zero
-        #then Z=0.
-        if((refStats[refIndex][1] > 0) and (refStats[refIndex][5] > 0)):
-            refStats[refIndex][6] = (refStats[refIndex][4] /
-                ((refStats[refIndex][5] / refStats[refIndex][1]) ** 0.5))
-"""
 
 def getMean(dataList):
     # Return the mean of a list of numerical data.
@@ -187,7 +163,7 @@ def getAbsoluteThirdCentralMoment(dataList, mean):
         return False
     return thirdMoment
 
-def getConfidenceInterval(sampleMean, variance, samples, alpha = 0.05):
+def getConfidenceInterval(sampleMean, variance, samples, alpha=0.05):
     # Find a two tailed confidence interval of the mean using the
     #central limit theorem.
     # Find Z score for alpha
@@ -201,14 +177,16 @@ def getConfidenceInterval(sampleMean, variance, samples, alpha = 0.05):
     return interval
 
 def conservativeConfidenceInterval(
-    sampleMean, variance, thirdMoment, samples, alpha = 0.05):
+    sampleMean, variance, thirdMoment, samples, alpha=0.05):
     # Use the Berry-Esseen theorem to find a conservative confidence
     #interval for the mean.
-    if variance is False:
+    if thirdMoment is False:
         return False
     else:
         stDev = variance**0.5
-        berryEsseenBoundNumerator = 0.33554 * (thirdMoment + 0.415*(stDev**3.0))
+        if(stDev == 0.0):
+            return False
+        berryEsseenBoundNumerator = 0.33554*(thirdMoment + 0.415*(stDev**3.0))
         berryEsseenBoundDenominator = (stDev**3.0)*(samples ** 0.5)
         berryEsseenBound = berryEsseenBoundNumerator/berryEsseenBoundDenominator
         # Find the quantile of the conservative interval.
@@ -222,6 +200,29 @@ def conservativeConfidenceInterval(
             upperLimit = sampleMean + (ZScore * ((variance/samples)**0.5))
             interval = [lowerLimit, upperLimit]
     return interval
+
+def conservativePValue(sampleMean, variance, thirdMoment, samples):
+    # Use the Berry-Esseen theorem to find a conservative p value for
+    #the hypothesis that the mean is above/below 0.
+    if thirdMoment is False:
+        return False
+    else:
+        # Find the Berry-Esseen bound.
+        stDev = variance**0.5
+        if(stDev == 0.0):
+            return False
+        berryEsseenBoundNumerator = 0.33554 * (thirdMoment + 0.415*(stDev**3.0))
+        berryEsseenBoundDenominator = (stDev**3.0)*(samples ** 0.5)
+        berryEsseenBound = berryEsseenBoundNumerator/berryEsseenBoundDenominator
+        # Find the sample mean Z score above 0.
+        ZScore = (samples**0.5)*abs(sampleMean)/stDev
+        # Find quantile for the ZScore and add the bound to be conservative.
+        quantile = norm.cdf(ZScore)
+        pValue = 1 - quantile + berryEsseenBound
+        # Adjust p value to 1 if bound is too large.
+        if(pValue >= 1):
+            pValue = 1
+    return pValue
 
 def updateRefStats(refStats, playerRefs, profitRecords, confidenceAlpha=0.05):
     # For each player's profit record recalculate summary statistics.
@@ -259,7 +260,9 @@ def updateRefStats(refStats, playerRefs, profitRecords, confidenceAlpha=0.05):
         else:
             refStats[player][7] = False
             refStats[player][8] = False
-        
+        pValue = conservativePValue(mean, variance, thirdMoment, samples)
+        refStats[player][9] = pValue
+
 def findMinSampleRef(refStats):
     # Find the ref number corresponding to the fewest samples.
     sampleSizes = refStats[:,1]
@@ -273,7 +276,7 @@ def finishedSampling(refStats, keyPlayers, requiredSampleSize):
     # If there are no key players then all players must meet the
     #required sample size.
     print("\n \n \n Ref Stats")
-    print(refStats)
+    #print(refStats)
     if((keyPlayers is False) or (keyPlayers == [])):
         minSamplesInfo = findMinSampleRef(refStats)
         minSamples = minSamplesInfo[1]
@@ -284,7 +287,7 @@ def finishedSampling(refStats, keyPlayers, requiredSampleSize):
         # Set minSamples to a high value before finding min.
         minSamples = requiredSampleSize
         # Find the lowest samples of all the key players.
-        for i in range(0, len(keyPlayers)):
+        for i in range(len(keyPlayers)):
             keyPlayerIndex = refNumbers.index(keyPlayers[i])
             playerSamples = refStats[keyPlayerIndex][1]
             if(playerSamples < minSamples):
@@ -302,7 +305,7 @@ def saveRefStats(fileName, refStats):
         ["Decision Ref", "Sample size", "Mean profit",
          "Variance profit", "Third absolute moment", "Confidence lower",
          "Confidence upper", "Conservative confidence lower",
-         "Conservative confidence upper"])
+         "Conservative confidence upper", "Mean p value"])
     results = np.vstack([columnTitles, refStats])
     with open(fileName, "wb") as resultsFile:
         writer = csv.writer(resultsFile)
@@ -356,7 +359,7 @@ def loadPlayerModels(refNumbers):
     playerModels = [0,0]
     playerModels[0] = refNumbers
     playerModels[1] = [[0]] * len(refNumbers)
-    for index in range(0, len(refNumbers)):
+    for index in range(len(refNumbers)):
         decisionMethod = PokerGames.getDecisionType(refNumbers[index])
         if(decisionMethod == "firstNNMethod"):
             decisionModels = loadFirstNNModels(refNumbers[index])
@@ -374,7 +377,7 @@ def getPlayerModels(playerRefs, tournamentModels):
     playerModels[1] = [[0]] * len(playerRefs)
     refNumbers = np.asarray(tournamentModels[:][0])
 
-    for i in range(0, len(playerRefs)):
+    for i in range(len(playerRefs)):
         # Find where in the list this player reference is.
         refIndex = np.where(refNumbers == playerRefs[i])[0][0]
         # Copy models for this player.
@@ -415,19 +418,83 @@ def recordNewProfits(profitRecords, playerRefs, refNumbers, scaledProfits):
         playerIndex = refNumbers.index(playerRefs[i])
         profitRecords[playerIndex].append(scaledProfits[i])
 
+def countPlayersActive(chips):
+    # Count the number of players with more than 0 chips.
+    playersActive = 0
+    for i in range(len(chips)):
+        if chips[i] > 0 :
+            playersActive++
+    return playersActive
+
+def updateTableInfo(
+    chips, refNumbers, tournamentPositions, originalRefNumbers):
+    # Remove any players with 0 chips left and update lists accordingly.
+    previousPlayersActive = len(chips)
+    activePlayers = countPlayersActive(chips)
+    position = activePlayers+1
+    newChips = []
+    newRefNumbers = []
+    for player in range(previousPlayersActive):
+        if chips[player] == 0:
+            # Find this player's index in the original list of players
+            #to record their position in the tournament.
+            playerIndex = originalRefNumbers.index(refNumbers[player])
+            # Multiple players get he same position if they lose in the
+            #same hand.
+            tournamentPositions[playerIndex] = position
+        else:
+            # Only append those players who have not lost.
+            newChips.append(chips[player])
+            newRefnumbers.append(refnumbers[player])
+    # Set previous lists equal to new lists to avoid returning them.
+    refNumbers = newRefNumbers
+    chips = newChips
+    dealerPosition = (dealerPosition+1) % activePlayers
+    # If there is one player left record them as the winner.
+    if activePlayers == 1:
+        winnerIndex = originalRefNumbers.index(refNumbers[0])
+        tournamentPositions[playerIndex] = 1
+    return dealerPosition
+
+def tableTournament(refNumbers, startChips=100, bigBlind=100):
+    # Play a tournament until 1 player wins all chips.
+    # Return a list with each player's position in the tournament.
+    numberPlayers = len(refNumbers)
+    if(numberPlayers > 10):
+        print("Warning, larger number of players at one table")
+        print(numberplayers, " players")
+    tournamentPositions = [0]*numberPlayers
+    chips = [startChips]*numberPlayers
+    dealerPosition = 0
+    originalRefNumbers = copy.copy(refNumbers)
+    playerTournamentModels = loadPlayerModels(refNumbers)
+    while(numberPlayers > 1):
+        # Play one hand then update table conditions.
+        playerNames = []
+        playerModels = getPlayerModels(refNumbers, playerTournamentModels)
+        for i in range(numberPlayers):
+            playerNames.append(str(refNumbers[i]))
+        chips = playHand(playerNames, chips, bigBlind, playerModels,
+                         dealerPosition, decisionRefs, fileNames)
+        # If anyone has 0 chips left then update table.
+        if 0.0 in chips:
+            dealerPosition = updateTableInfo(chips, refNumbers,
+                                             tournamentPositions,
+                                             originalRefNumbers)
+    return tournamentPositions
+
 def monteCarloGames(
     refNumbers, playerDistribution = "uniform", keyPlayers = False,
-    bigBlind = 100, minChips = 10, maxChips = 200, sampleSize = 1000,
-    maxPlayers = 8,
+    bigBlind=100, minChips=10, maxChips=200, sampleSize=1000, maxPlayers=8,
     resultsFile = "decisionMakers/decisionMakersComparison.csv"):
     # Play hands with random chip counts to test player performance in
     #random scenarios.
-    # refNumbers is a list of all refNumbers which can play.
+    # refNumbers is a list of all refNumberswhich can play.
     tournamentSize = len(refNumbers)
     # keyPlayers is list of specific refs being tested. At least one
     #must play in each game.
     if((keyPlayers is not False) and (keyPlayers != [])):
-        for i in range(0, ln(keyPlayers)):
+        for i in range(len(keyPlayers)):
             if(keyPlayers[i] not in refNumbers):
                 # Put key player at the start of the refs list.
                 refNumbers.insert(keyPlayer[i])
@@ -435,7 +502,7 @@ def monteCarloGames(
     # refStats contains refNumbers, samples, sumProfit, sumSqProfit,
     #meanProfit, varProfit, ZScore.
     refNumArray = np.copy(refNumbers)
-    refStats = np.zeros((len(refNumbers), 9))
+    refStats = np.zeros((len(refNumbers), 10))
     refStats[:,0] = refNumbers
 
     # Load decision making models.
@@ -476,4 +543,4 @@ def monteCarloGames(
 # Test performance of decision makers 1-10.
 players = [int(i) for i in range(1,11)]
 print players
-monteCarloGames(players, sampleSize = 5000)
+monteCarloGames(players, sampleSize = 10000)
