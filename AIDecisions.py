@@ -35,9 +35,9 @@ def openWeigthsTSVFile(filePath, layerSizes):
                     weightsList.append(number)
     # Transfer weights from 1D list to 3D list
     k = 0
-    for layerCount in range(0, (numberLayers - 1)):
-        for i in range(0, layerSizes[layerCount]):
-            for j in range(0, layerSizes[layerCount + 1]):
+    for layerCount in range((numberLayers - 1)):
+        for i in range(layerSizes[layerCount]):
+            for j in range(layerSizes[layerCount + 1]):
                 weights[layerCount][i][j] = float(weightsList[k])
                 k += 1
     return weights
@@ -59,11 +59,11 @@ def oneLayerFeedForward(currentLayer, nextLayerSize, weights, activation):
     nextLayer = np.dot(currentLayer, weights)
     # Apply the activation function.
     if(activation == "relu"):
-        for i in range(0, nextLayerSize):
+        for i in range(nextLayerSize):
             if(nextLayer[i] < 0):
                 nextLayer[i] = 0
     elif(activation == "sigmoid"):
-        for i in range(0, nextLayerSize):
+        for i in range(nextLayerSize):
             nextLayer[i] = 1 / (1 + (2.718282 ** (-1 * nextLayer[i])))
     elif(activation == "none"):
         # Do nothing.
@@ -81,7 +81,7 @@ def geneticNNFeedForward(layerSizes, inputLayer, allWeights, activations):
     # Copy inputLayer into currentLayer.
     currentLayer = np.array(inputLayer)
     # Repeatedly pass the current layer through each layer of the NN.
-    for layerIndex in range(0,numberLayers - 1):
+    for layerIndex in range(numberLayers - 1):
         # Put bias input of 1 at the start of the current layer.
         currentLayer[0] = 1
         # Set up weights for this feed forward layer.
@@ -133,7 +133,7 @@ def prepareGeneticInputs(
     inputLayer[7] = normalizeUniformVariable(initialNumberPlayers, 5.0, 6.0)
     # Sort raises to set as input variables.
     orderedRaises = [0] * initialNumberPlayers
-    for i in range(0, initialNumberPlayers):
+    for i in range(initialNumberPlayers):
         if(not folds[i]):
             orderedRaises[i] = raises[i]
         else:
@@ -162,7 +162,7 @@ def prepareFirstNNInputs(betConditions):
     raises = np.zeros(initialNumberPlayers)
     calls = np.zeros(initialNumberPlayers)
     folds = np.zeros(initialNumberPlayers)
-    for j in range(0, initialNumberPlayers):
+    for j in range(initialNumberPlayers):
         chips[j] = betConditions[12 + j]
         bets[j] = betConditions[12 + j + initialNumberPlayers]
         raises[j] = betConditions[12 + j + (initialNumberPlayers * 2)]
@@ -248,7 +248,7 @@ def getProfitMoments(categoryDistribution, categoryValues):
 def getCategoryMeans(refNumber, filename):
     # Open file containing limits of each category.
     currentPath = os.getcwd()
-    decisionSubFolder = ("decisionMakers/decisionMaker" + str(refNumber)
+    decisionSubFolder = ("decisionMakers/decisionMaker" + str(int(refNumber))
     + "/" + str(filename))
     fullFilePath = os.path.join(currentPath, decisionSubFolder)
     #with open(fullFilePath, 'rb') as csvfile:
@@ -261,7 +261,7 @@ def getCategoryMeans(refNumber, filename):
     # Find the mean within each category.
     numberCategories = len(categoryLimits) - 1
     categoryMeans = [0.0] * numberCategories
-    for i in range(0, numberCategories):
+    for i in range(numberCategories):
         categoryMeans[i] = ((categoryLimits[i] + categoryLimits[i + 1]) / 2)
     return categoryMeans
  
@@ -332,7 +332,7 @@ def optimizeBet(
     	logBetRange = (logChipCount - logCallValue)
     	logBetInterval = logBetRange / (searchResolution - 1)
     	optimumBetScore = 0 # Folding always has score of 0.
-    	for i in range(0, searchResolution):
+    	for i in range(searchResolution):
 	    logBet = logCallValue + (logBetInterval * i)
 	    bet = (2.7183 ** logBet) - 1
 	    betConditions[0] = bet

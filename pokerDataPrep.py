@@ -101,7 +101,7 @@ def discretizeProfits(
     profits = profitData[:,0]
     # Divide the profits into categories according to data quantiles.
     quantiles = []
-    for i in range(0, numberCategories):
+    for i in range(numberCategories):
         quantiles.append((100 * i) / numberCategories)
     # Get the profit values corresponding to quantiles.
     profitCatLimits = np.percentile(profits, quantiles)
@@ -118,9 +118,9 @@ def discretizeProfits(
     # Create boolean values indicating which category a profit value is in.
     rowCount = profitData.shape[0]
     discretizedProfits = np.zeros([rowCount, numberCategories])
-    for j in range(0, rowCount):
+    for j in range(rowCount):
         rowProfit = profitData[j][0]
-        for i in range(0, numberCategories):
+        for i in range(numberCategories):
             inCategory = ((profitCatLimits[i] <= rowProfit)
             and (rowProfit < profitCatLimits[i + 1]))
             if(inCategory):
@@ -134,16 +134,16 @@ def discretizeProfits(
     # Multiply boolean values for category by the profit in each row.
     categorySumProfits = np.zeros(numberCategories)
     categoryAverageProfits = np.zeros(numberCategories)
-    for i in range(0, numberCategories):
+    for i in range(numberCategories):
         categoryBools = discretizedData[:, i]
         categorySumProfits[i] = np.dot(categoryBools, profits)
         categoryAverageProfits[i] = (categorySumProfits[i] / sum(categoryBools))
     # Write the profit category limits and the average profits in each category
     #to a file in the given decision maker's folder.
     categoryInfo = np.zeros([2, numberCategories + 1])
-    for i in range(0, numberCategories + 1):
+    for i in range(numberCategories + 1):
         categoryInfo[0][i] = profitCatLimits[i]
-    for i in range(0, numberCategories):
+    for i in range(numberCategories):
         categoryInfo[1][i] = categoryAverageProfits[i]
     currentPath = os.getcwd()
     subFolder = ("decisionMakers/decisionMaker" + str(decisionRefNumber)
@@ -182,9 +182,9 @@ def discretizeLosses(
     # Create boolean values indicating which category a loss value is in.
     rowCount = lossData.shape[0]
     discretizedLosses = np.zeros([rowCount, numberCategories])
-    for j in range(0, rowCount):
+    for j in range(rowCount):
         rowLoss = lossData[j][0]
-        for i in range(0, numberCategories):
+        for i in range(numberCategories):
             inCategory = ((lossCatLimits[i] < rowLoss)
             and (rowLoss <= lossCatLimits[i + 1]))
             if(inCategory):
@@ -198,16 +198,16 @@ def discretizeLosses(
     # Multiply boolean values for category by the loss in each row.
     categorySumLosses = np.zeros(numberCategories)
     categoryAverageLosses = np.zeros(numberCategories)
-    for i in range(0, numberCategories):
+    for i in range(numberCategories):
         categoryBools = discretizedData[:, i]
         categorySumLosses[i] = np.dot(categoryBools, losses)
         categoryAverageLosses[i] = (categorySumLosses[i] / sum(categoryBools))
     # Write the loss category limits and the average losses in each category
     #to a file in the given decision maker's folder.
     categoryInfo = np.zeros([2, numberCategories + 1])
-    for i in range(0, numberCategories + 1):
+    for i in range(numberCategories + 1):
         categoryInfo[0][i] = lossCatLimits[i]
-    for i in range(0, numberCategories):
+    for i in range(numberCategories):
         categoryInfo[1][i] = categoryAverageLosses[i]
     currentPath = os.getcwd()
     subFolder = ("decisionMakers/decisionMaker" + str(decisionRefNumber)

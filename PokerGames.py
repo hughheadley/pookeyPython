@@ -43,7 +43,7 @@ def dealCard(existingCards):
         newCard = random.randint(1,52)
         uniqueCard = True
         # Check if card is unique.
-        for i in range(0,len(existingCards)):
+        for i in range(len(existingCards)):
             if(existingCards[i] == 0):
                 # Card is unique, end the testing for uniqueness.
                 i = 52
@@ -163,7 +163,7 @@ def showHoleCards(position, playerNames, AIPlayers, playerCards):
         printCard(playerCards[position][1])
         temp = raw_input("Enter anything to continue\n")
         # Print many line breaks to hide cards from the next player.
-        for i in range(0,20):
+        for i in range(20):
             print "\n"
 
 def getDeucesCardNumber(cardIndex):
@@ -241,21 +241,21 @@ def getHandStrength(holeCards, communityCards, roundNumber, sampleSize=400):
     # Add my cards and community cards to existing card set.
     existingCards[0] = holeCards[0]
     existingCards[1] = holeCards[1]
-    for i in range(0, communityCardCount):
+    for i in range(communityCardCount):
         existingCards[i + 2] = communityCards[i]
     # Test win/loss outcome repeatedly.
     winCount = 0
     opponentCards = [0] * 2
-    for i in range(0, sampleSize):
+    for i in range(sampleSize):
         # Use copy of communityCards for testing
         communityCardsCopy = []
-        for j in range(0, communityCardCount):
+        for j in range(communityCardCount):
             communityCardsCopy.append(communityCards[j])
         # Generate opponent's cards and remaining community cards.
         for j in range(communityCardCount, 5):
             communityCardsCopy.append(dealCard(existingCards))
             existingCards[j + 2] = communityCardsCopy[j]
-        for j in range(0,2):
+        for j in range(2):
             opponentCards[j] = dealCard(existingCards)
             existingCards[j + 7] = opponentCards[j]
         # Put opponent hand and community cards in deuces form.
@@ -349,7 +349,7 @@ def autoDealRoundOne(
     for i in range(dealingStart, dealingEnd):
         position = i % initialNumberPlayers
         if(not folds[position]):
-            for j in range(0,2):
+            for j in range(2):
                 newCard = dealCard(existingCards)
                 playerCards[position][j] = newCard
                 existingCards[(2 * (i - dealingStart)) + j] = newCard
@@ -362,7 +362,7 @@ def autoDealRoundTwo(
     if(not trainingMode):
         print "\nThe flop cards are:"
     # Generate and store a flop cards.
-    for i in range(0,3):
+    for i in range(3):
         newCard = dealCard(existingCards)
         communityCards[i] = newCard
         existingCards[(initialNumberPlayers * 2) + i] = newCard
@@ -649,8 +649,8 @@ def postBetUpdate(
 def sortBets(bets, positions):
     # Put bets array in order highest to lower and order positions so
     #that they match their bets.
-    for i in range(0, len(bets)):
-        for j in range(0, len(bets)):
+    for i in range(len(bets)):
+        for j in range(len(bets)):
             if(bets[i] > bets[j]):
                 temp = bets[i]
                 bets[i] = bets[j]
@@ -666,8 +666,8 @@ def adjustHighestBet(bets, chips, raises, bigBlind):
     initialNumberPlayers = len(bets)
     maxBet = np.amax(bets)
     tempBets = [0] * initialNumberPlayers
-    betPositions = range(0, initialNumberPlayers)
-    for position in range (0,initialNumberPlayers):
+    betPositions = range(initialNumberPlayers)
+    for position in range(initialNumberPlayers):
         tempBets[position] = bets[position]
     sortBets(tempBets, betPositions)
     # If one player bet more than everybody adjust the pot, ect.
@@ -871,12 +871,12 @@ def doBetting(
     return betInfo
 
 def sortHandRanks(handRanks):    
-    handRankPositions = range(0,len(handRanks))
+    handRankPositions = range(len(handRanks))
     # Put handRanks list in order lowest to highest and order positions
     #so that they match their handRanks.
     # A lower hand rank indicates a better hand.
-    for i in range(0, len(handRanks)):
-        for j in range(0, len(handRanks)):
+    for i in range(len(handRanks)):
+        for j in range(len(handRanks)):
             if(handRanks[i] < handRanks[j]):
                 temp = handRanks[i]
                 handRanks[i] = handRanks[j]
@@ -893,7 +893,7 @@ def rankPositions(playerCards, communityCards, folds, handRanks):
     foldedHandRank = 10000 # A score worse than any non-folded outcome.
     board = setUpDeucesCards(communityCards)
     evaluator = Evaluator()
-    for position in range(0, initialNumberPlayers):
+    for position in range(initialNumberPlayers):
         if(not folds[position]):
             holeCards[0] = playerCards[position][0]
             holeCards[1] = playerCards[position][1]
@@ -932,7 +932,7 @@ def giveTiedWinnings(firstTieIndex, bets, chips, handScores, winnerPositions):
     # Loop through all players to take winnings from.
     winnerBet = bets[minBetPosition]
     sumWinnings = 0
-    for i in range(0, initialNumberPlayers):
+    for i in range(initialNumberPlayers):
         # If the winner has a higher bet then take all of the loser's
         #money.
         if(winnerBet >= bets[i]):
@@ -956,10 +956,10 @@ def giveWinnings(
     initialNumberPlayers = len(bets)
     # Print all players' cards.
     if(not trainingMode):
-        for position in range(0, initialNumberPlayers):
+        for position in range(initialNumberPlayers):
             if(not folds[position]):
                 print "\n" + playerNames[position] + "'s cards are"
-                for i in range(0,2):
+                for i in range(2):
                     suitTemp = cardIndexToSuit(playerCards[position][i])
                     cardNumberTemp = cardIndexToNumber(
                         playerCards[position][i])
@@ -970,7 +970,7 @@ def giveWinnings(
     winnerPositions = rankPositions(
         playerCards, communityCards, folds, handScores)
     # Loop through all players to collect their winnings.
-    for i in range(0, initialNumberPlayers - sum(folds) - 1):
+    for i in range(initialNumberPlayers - sum(folds) - 1):
         if(not folds[winnerPositions[i]]):
             sumWinnings = 0
             winnerBet = bets[winnerPositions[i]]
@@ -991,7 +991,7 @@ def giveWinnings(
                 giveTiedWinnings(i, bets, chips, handScores, winnerPositions)
             else:
                 # Loop through all players to take winnings from.
-                for j in range(0, initialNumberPlayers):
+                for j in range(initialNumberPlayers):
                     # If the winner has a higher bet then take all of
                     #the loser's money.
                     if(winnerBet >= bets[j]):
@@ -1036,7 +1036,7 @@ def playHand(
         AIPlayers = []
         for i in range(initialNumberPlayers):
             AIPlayers.append(True)
-    for i in range(0,initialNumberPlayers):
+    for i in range(initialNumberPlayers):
         chips[i] = initialChips[i]
     folds = [False] * initialNumberPlayers
     playerCards = np.zeros((2 * initialNumberPlayers,2))
@@ -1066,7 +1066,7 @@ def playHand(
         # Get the strength of each player's hand.
         cardStrengths = [0] * initialNumberPlayers
         holeCards = [0] * 2
-        for position in range(0,initialNumberPlayers):
+        for position in range(initialNumberPlayers):
             # Only check card strength if a player is not human, is not
             #folded, and has chips to bet
             checkCardStrength = ((not folds[position]) and (AIPlayers[position])
