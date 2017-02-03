@@ -11,6 +11,7 @@ import copy
 import csv
 from scipy.stats import norm
 from keras.models import model_from_json
+from sklearn.externals import joblib
 
 random.seed()
 
@@ -92,7 +93,8 @@ def randomChips(bigBlind, minChips, maxChips, initialNumberPlayers):
     return initialChips
 
 def playRandomHand(
-    decisionRefs, playerModels, bigBlind=100, minChips=10, maxChips=200):
+    decisionRefs, playerModels, bigBlind=100, minChips=10, maxChips=200,
+    recordBets=False):
     # Players start with a random amount of chips to simulate a random
     #point in a tournament.
     initialNumberPlayers = len(decisionRefs)
@@ -106,15 +108,13 @@ def playRandomHand(
         playerNames.append(str(decisionRefs[i]))
     # Prepare values for playHand function.
     AIPlayers = [True] * initialNumberPlayers
-    manualDealing = False
-    trainingMode = True
-    dealerPosition = 0
     fileNames = getFileNames(decisionRefs)
     # Play one hand.
-    finalChips = PokerGames.playhand(
-    playerNames, initialChips, bigBlind, dealerPosition, manualDealing,
-    trainingMode, AIPlayers, playerModels, decisionRefs, fileNames,
-    recordBets=True)
+    finalChips = PokerGames.playHand(playerNames, initialChips, bigBlind,
+                                     playerModels, AIPlayers=AIPlayers,
+                                     decisionRefs=decisionRefs,
+                                     fileNames=fileNames,
+                                     recordBets=recordBets)
     # Convert the chips list into a numpy array.
     np.asarray(finalChips)
     profits = np.subtract(finalChips, initialChips)
@@ -275,7 +275,7 @@ def findMinSampleRef(refStats):
 def finishedSampling(refStats, keyPlayers, requiredSampleSize):
     # If there are no key players then all players must meet the
     #required sample size.
-    print("\n \n \n Ref Stats")
+    #print("\n \n \n Ref Stats")
     #print(refStats)
     if((keyPlayers is False) or (keyPlayers == [])):
         minSamplesInfo = findMinSampleRef(refStats)
@@ -287,8 +287,8 @@ def finishedSampling(refStats, keyPlayers, requiredSampleSize):
         # Set minSamples to a high value before finding min.
         minSamples = requiredSampleSize
         # Find the lowest samples of all the key players.
-        for i in range(len(keyPlayers)):
-            keyPlayerIndex = refNumbers.index(keyPlayers[i])
+        for player in keyPlayers:
+            keyPlayerIndex = np.where(refNumbers==player)[0][0]
             playerSamples = refStats[keyPlayerIndex][1]
             if(playerSamples < minSamples):
                 minSamples = playerSamples
@@ -352,6 +352,26 @@ def loadFirstNNModels(decisionRefNumber):
     decisionModels = [winDefeatModel, profitModel, lossModel]
     return decisionModels
 
+def loadLogisticModels(
+    decisionRefNumber, winDefeatFile="winDefLogistic.pkl",
+    profitFile="profitLogistic.pkl", lossFile="lossLogistic.pkl"):
+    # Load all logistic models used by decision maker.
+    # Get file path of each model.
+    currentPath = os.getcwd()
+    decisionMakerFolder = ("decisionMakers/decisionMaker"
+                           + str(decisionRefNumber))
+    decisionMakerPath = os.path.join(currentPath, decisionMakerFolder)
+    winDefeatPath = os.path.join(decisionMakerPath, winDefeatFile)
+    profitPath = os.path.join(decisionMakerPath, profitFile)
+    lossPath = os.path.join(decisionMakerPath, lossFile)
+
+    winDefeatModel = joblib.load(winDefeatPath)
+    profitModel = joblib.load(profitPath)
+    lossModel = joblib.load(lossPath)
+
+    decisionModels = [winDefeatModel, profitModel, lossModel]
+    return decisionModels
+
 def loadPlayerModels(refNumbers):
     # Load each of the models used to decide bets.
     # playerModels contains two columns, one with ref Numbers, the other with
@@ -363,6 +383,9 @@ def loadPlayerModels(refNumbers):
         decisionMethod = PokerGames.getDecisionType(refNumbers[index])
         if(decisionMethod == "firstNNMethod"):
             decisionModels = loadFirstNNModels(refNumbers[index])
+            playerModels[1][index] = decisionModels
+        elif(decisionMethod == "logistic"):
+            decisionModels = loadLogisticModels(refNumbers[index])
             playerModels[1][index] = decisionModels
         else:
             playerModels[1][index] = []
@@ -422,8 +445,8 @@ def countPlayersActive(chips):
     # Count the number of players with more than 0 chips.
     playersActive = 0
     for i in range(len(chips)):
-        if chips[i] > 0 :
-            playersActive++
+        if(chips[i] > 0):
+            playersActive+=1
     return playersActive
 
 def updateTableInfo(
@@ -486,6 +509,7 @@ def tableTournament(refNumbers, startChips=100, bigBlind=100):
 def monteCarloGames(
     refNumbers, playerDistribution = "uniform", keyPlayers = False,
     bigBlind=100, minChips=10, maxChips=200, sampleSize=1000, maxPlayers=8,
+    recordBets=False,
     resultsFile = "decisionMakers/decisionMakersComparison.csv"):
     # Play hands with random chip counts to test player performance in
     #random scenarios.
@@ -524,9 +548,9 @@ def monteCarloGames(
         # Get models for those playing this game.
         playerModels = getPlayerModels(playerRefs, playerTournamentModels)
         # Play one hand.
-        profits = playRandomHand(
-            playerRefs, playerModels, bigBlind = bigBlind, minChips = minChips,
-            maxChips = maxChips)
+        profits = playRandomHand(playerRefs, playerModels, bigBlind=bigBlind,
+                                 minChips=minChips, maxChips=maxChips,
+                                 recordBets=recordBets)
         # Scale profits by big blind.
         profitsArray = np.array(profits)
         scaledProfits = np.divide(profitsArray, bigBlind)
@@ -536,11 +560,15 @@ def monteCarloGames(
         updateRefStats(refStats, playerRefs, profitRecords)
         # Test if sampleSize is reached.
         sampleSizeReached = finishedSampling(refStats, keyPlayers, sampleSize)
+        
     # Display the stats for each player.
     print refStats
     saveRefStats(resultsFile, refStats)
 
 # Test performance of decision makers 1-10.
-players = [int(i) for i in range(1,11)]
+players = [1,2,3,4,5,6,7,8,9,10,12,13]
 print players
-monteCarloGames(players, sampleSize = 10000)
+keyPlayers = [13]
+recordBets = 13
+monteCarloGames(players, sampleSize = 10000, keyPlayers=keyPlayers,
+                recordBets=recordBets)

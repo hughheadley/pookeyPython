@@ -474,6 +474,10 @@ def getAIBet(
         newBet = AIDecisions.firstNNMethodDecision(
             decisionMakerReference, position, handStrength, roundNumber,
             bigBlind, chips, bets, raises, calls, folds, decisionModels)
+    elif(decisionMethod == "logistic"):
+        newBet = AIDecisions.logisticDecision(decisionMakerReference,
+            position, handStrength, roundNumber, bigBlind, chips, bets,
+            raises, calls, folds, decisionModels)
     else:
         prompt = (
             "Error in PokerGames module in getAIBet function."
@@ -744,7 +748,6 @@ def recordGameState(
 def recordProfit(
     profit, bigBlind, betRecordFile = "trainingDump/betRecords.csv"):
     # Record profit in the final line of the csv file.
-    print("profit rec")
     # Open csv as a 2D list.
     csvData = csv.reader(open(betRecordFile))
     lines = [l for l in csvData]
@@ -754,13 +757,25 @@ def recordProfit(
     writer = csv.writer(open(betRecordFile, 'wb'))
     writer.writerows(lines)
 
+def incrementActionCount(actionCount, recordBets, playerName):
+    # Increase the action Acount by 1 if it is suitable to do so.
+    if(recordBets is True):
+        # Any player can be recorded, therefore increase actionCount.
+        actionCount += 1
+    else:
+        # Only one player can be recorded, check if they are betting now.
+        playerRef = int(float(playerName))
+        if(recordBets == playerRef):
+            actionCount += 1
+    return actionCount
+
 def getOneBet(
     trainingMode,  bigBlind, roundNumber, position, playerNames, AIPlayers,
     chips, bets, raises, calls, folds, cardStrengths, playerCards,
-    communityCards, playerModels, decisionRefs, fileNames,
-    actionToRecord = False, actionCount = False, callChance = 0.3,
-    betRecordFile = "trainingDump/betRecords.csv",
-    recordedPosition = False):
+    communityCards, playerModels, decisionRefs, fileNames, recordBets=False,
+    actionToRecord=False, actionCount=False, callChance=0.3,
+    recordedPosition=False, betRecordFile="trainingDump/betRecords.csv"):
+    # Get the bet of one player.
     newBet = 0
     if(not folds[position]):
         # Check if player can bet.
@@ -792,9 +807,16 @@ def getOneBet(
                         newBet = min(chipCount, callValue)
             # If recording this bet then make the bet random,
             #overwrie old bet made and record game state.
-            if(actionToRecord is not False):
-                actionCount += 1
-                if(actionCount == actionToRecord):
+            if(recordBets is not False):
+                playerName = playerNames[position]
+                actionCount = incrementActionCount(actionCount, recordBets,
+                                                   playerName)
+                recordAnyPlayer = ((actionCount == actionToRecord)
+                                   and (recordBets is True))
+                recordOnePlayer = ((actionCount == actionToRecord)
+                                   and (recordBets == int(float(playerName)))
+                                   and (recordBets is not True))
+                if(recordAnyPlayer or recordOnePlayer):
                     newBet = randomBet(bigBlind, position, chips, bets,
                                        callChance = callChance)
                     newBet = int(newBet)
@@ -817,7 +839,7 @@ def doBetting(
     trainingMode, bigBlind, roundNumber, chips, bets, raises, calls, folds,
     startPosition, playerNames, cardStrengths, AIPlayers, playerCards,
     communityCards, playerModels, decisionRefs=[], fileNames=[],
-    actionCount=False, actionToRecord=False,
+    actionCount=False, actionToRecord=False, recordBets=False,
     betRecordFile = "trainingDump/betRecords.csv", callChance=0.3):
     # Conduct a round of betting, update chips and return the final
     #position played from.
@@ -844,11 +866,12 @@ def doBetting(
                                    bets, raises, calls, folds, cardStrengths,
                                    playerCards, communityCards, playerModels,
                                    decisionRefs, fileNames,
-                                   actionToRecord = actionToRecord,
-                                   actionCount = actionCount,
-                                   callChance = callChance,
-                                   betRecordFile = betRecordFile,
-                                   recordedPosition = recordedPosition)
+                                   recordBets=recordBets,
+                                   actionToRecord=actionToRecord,
+                                   actionCount=actionCount,
+                                   callChance=callChance,
+                                   betRecordFile=betRecordFile,
+                                   recordedPosition=recordedPosition)
             newBet = oneBetInfo[0]
             actionCount = oneBetInfo[1]
             recordedPosition = oneBetInfo[2]
@@ -1004,7 +1027,7 @@ def giveWinnings(
                 chips[winnerPositions[i]] += sumWinnings
 
 def selectActionNumber(initialNumberPlayers):
-    # Pick a random move/action based on the expected number of moves
+    # Pick a random action based on the expected number of moves
     #that are made in a game.
     # Number of actions made in a game is approx 2.5 for every player.
     actionNumber = -1
@@ -1013,6 +1036,28 @@ def selectActionNumber(initialNumberPlayers):
     while(actionNumber < 1):
         # Minimum actionNumber is 1.
         actionNumber = int(random.gauss(meanActions, stDevActions) + 0.5)
+    return actionNumber
+
+def selectPlayerAction(initialNumberPlayers):
+    # Pick a random action based on the expected number of moves
+    #made by one player in the game.
+    # Approximately exponential distirbution.
+    actionNumber = -1
+    meanActions = 2.09 + (-0.069 * initialNumberPlayers)
+    while(actionNumber < 1):
+        # Minimum actionNumber is 1.
+        actionNumber = int(random.expovariate(1.0/meanActions) + 1.0)
+    return actionNumber
+
+def getRecordAction(recordBets, initialNumberPlayers):
+    # Choose a random action number to record bets on.
+    if(recordBets is True):
+        # When recordBets is True any player's action is being recorded.
+        actionNumber = selectActionNumber(initialNumberPlayers)
+    else:
+        # When recordBets is equal to a player's ref number then that
+        #player is recorded.
+        actionNumber = selectPlayerAction(initialNumberPlayers)
     return actionNumber
 
 def playHand(
@@ -1050,10 +1095,10 @@ def playHand(
     actionCount = 0
     recordedPosition = False
     storedBetPosition = False
-    if(recordBets):
+    if(recordBets is not False):
         # Choose a random action on which to record game state and
         #new Bet.
-        recordActionNumber = selectActionNumber(initialNumberPlayers)
+        recordActionNumber = getRecordAction(recordBets, initialNumberPlayers)
     else:
         recordActionNumber = False
     # Loop through all rounds of betting.
@@ -1081,18 +1126,17 @@ def playHand(
             trainingMode, bigBlind, roundNumber, chips, bets, raises, calls,
             folds, actionPosition, playerNames, cardStrengths, AIPlayers,
             playerCards, communityCards, playerModels,
-            decisionRefs = decisionRefs, fileNames = fileNames,
-            actionCount = actionCount, actionToRecord = recordActionNumber,
-            betRecordFile = betRecordFile)
+            decisionRefs=decisionRefs, fileNames=fileNames,
+            actionCount=actionCount, actionToRecord=recordActionNumber,
+            recordBets=recordBets, betRecordFile=betRecordFile)
         actionPosition = bettingInfo[0]
         actionCount = bettingInfo[1]
         recordedPosition = bettingInfo[2]
         if(recordedPosition is not False):
             storedBetPosition = recordedPosition
     # Evaluate winners and give chips to winners.
-    giveWinnings(
-        chips, bets, folds, playerNames, playerCards, communityCards,
-        trainingMode)
+    giveWinnings(chips, bets, folds, playerNames, playerCards, communityCards,
+                 trainingMode)
     # Record actionCount.
     actionInfo = []
     actionInfo.append(initialNumberPlayers)
