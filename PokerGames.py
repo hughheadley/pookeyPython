@@ -6,6 +6,7 @@ import random
 import datetime
 import AIDecisions
 from deuces import Card, Evaluator
+import handEval
 import os
 import math
 import csv
@@ -1119,8 +1120,9 @@ def playHand(
             if(checkCardStrength):
                 holeCards[0] = playerCards[position][0]
                 holeCards[1] = playerCards[position][1]
-                cardStrengths[position] = getHandStrength(
-                    holeCards, communityCards, roundNumber)
+                cardStrengths[position] = handEval.get_hand_strength(holeCards,
+                        communityCards, roundNumber, confidence=0.95,
+                        confRange=0.1, method="deuces")
         # Begin the betting.
         bettingInfo = doBetting(
             trainingMode, bigBlind, roundNumber, chips, bets, raises, calls,
